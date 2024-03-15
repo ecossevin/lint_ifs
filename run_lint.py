@@ -1,3 +1,5 @@
+import importlib
+from conftest import run_linter, available_frontends
 
 from loki import * 
 
@@ -70,30 +72,27 @@ class dummy_args_cst_type(GenericRule):
     """
 
     @classmethod
-   
     def check_subroutine(subroutine):
-    """
-    """
-    msg=""
-    for variable_name in ["ydmodel", "ydgeometry"]:
-    #for variable_name in ["ydmodel", "ydgeometry", "ydvars"]:
-        if variable_name in subroutine.variable_map:
-            variable=subroutine.variable_map[variable_name]
-            if not variable.type.intent:
-                msg+=f"Routine :  {subroutine.name} => {variable_name} has no intent"
-                if len(msg)!=0:
-                    msg=msg+"\n"
-              
-
-            else:
-                if variable.type.intent!="in":
-      
-                    msg+=f"Routine :  {subroutine.name} => {variable_name} has wrong intent : {variable.type.intent} (not intent in)"
+        msg=""
+        for variable_name in ["ydmodel", "ydgeometry"]:
+        #for variable_name in ["ydmodel", "ydgeometry", "ydvars"]:
+            if variable_name in subroutine.variable_map:
+                variable=subroutine.variable_map[variable_name]
+                if not variable.type.intent:
+                    msg+=f"Routine :  {subroutine.name} => {variable_name} has no intent"
                     if len(msg)!=0:
                         msg=msg+"\n"
-
-    if(len(msg)!=0):
-        rule_report.add(msg)
+                  
+    
+                else:
+                    if variable.type.intent!="in":
+          
+                        msg+=f"Routine :  {subroutine.name} => {variable_name} has wrong intent : {variable.type.intent} (not intent in)"
+                        if len(msg)!=0:
+                            msg=msg+"\n"
+    
+        if(len(msg)!=0):
+            rule_report.add(msg)
 #=====================================================================
 #=====================================================================
 #                 Temporaries of NPROMA subroutines
@@ -134,7 +133,8 @@ class temporaries_alloc(GenericRule):
             rule_report.add(msg)
     
 
-source = Sourcefile.from_source(fcode)
+file="sub.F90"
+source = Sourcefile.from_file(file)
 messages = []
 handler = DefaultHandler(target=messages.append)
 run_linter(source, [rules.dummy_args_alloc], handlers=[handler])
