@@ -200,7 +200,6 @@ def check9(subroutine):
     X:Y => is_section = True
     N => is_scalar = True
     """
-    print("check9") 
     msg=""
     calls=FindNodes(CallStatement).visit(subroutine.body)
     for call in calls:
@@ -238,6 +237,35 @@ def check9(subroutine):
 
     if len(msg)!=0:
         return(f"Routine :  {subroutine.name} => \n" + msg)
+#=====================================================================
+#=====================================================================
+#                 Modules variables in NPROMA routines
+#=====================================================================
+#=====================================================================
+def check10(subroutine):
+    """
+    Checks if modules variables are used.
+    Are allowed: modules variables in lst_import + ['LFLEXDIA','LMUSCLFA','NMUSCLFA'] + var starting with T or ending with TYPE, that is module var that are TYPES
+    """
+    import re
+    verbose=False
+    lst_import=['GEOMETRY', 'MF_PHYS_TYPE', 'CPG_MISC_TYPE', 'CPG_DYN_TYPE', 'CPG_GPAR_TYPE', 'CPG_PHY_TYPE', 'CPG_SL2_TYPE', 'CPG_BNDS_TYPE', 'CPG_OPTS_TYPE', 'MF_PHYS_SURF_TYPE', 'FIELD_VARIABLES', 'MF_PHYS_BASE_STATE_TYPE', 'MF_PHYS_NEXT_STATE_TYPE', 'MODEL', 'JPIM', 'JPRB', 'LHOOK', 'DR_HOOK', 'JPHOOK', 'TYP_DDH']
+    
+    module_vars=[]
+    imports=FindNodes(Import).visit(subroutine.spec) 
+    for imp in imports:
+        if imp.symbols:
+            for symbol in imp.symbols:
+                if verbose: print(symbol)
+                if symbol not in lst_import:
+                    if not (re.match(r'^T', symbol.name) or re.search(r'TYPE$', symbol.name)):
+                        if symbol.name not in ['LFLEXDIA','LMUSCLFA','NMUSCLFA']:
+                            module_vars.append(symbol.name)
+                            
+    if len(module_vars) !=0:
+        return(f"Routine :  {subroutine.name} => module variables : {module_vars} are forbidden")
+                
+        
 
 
 #Dummy arguments of NPROMA subroutines ::: 
@@ -253,3 +281,5 @@ print(check7(subroutine))
 #Calling other NPROMA routines 
 print(check8(subroutine))
 print(check9(subroutine))
+#Modules variables in NPROMA routines
+print(check10(subroutine))
