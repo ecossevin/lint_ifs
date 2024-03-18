@@ -189,7 +189,55 @@ def check8(subroutine):
     if new_calls:
         msg=f"Routine :  {subroutine.name} => some subroutines call from the subroutine aren't declared using an interface block : {new_calls}"
         return(msg)
-    
+
+def check9(subroutine):
+    """
+    Checks if array sections passed to NPROMA routines use the Fortran slice notation.
+    This shouldn't be use outside NPROMA routines. Outside NPROMA routines, some non-NPROMA routines can be called. Todo : add smthg if this check is used in a driver routine.
+
+    CALL( ... Array\((:,)*(X:Y){0,1}(N)*\) ... )
+    : => is_slice = True
+    X:Y => is_section = True
+    N => is_scalar = True
+    """
+    print("check9") 
+    msg=""
+    calls=FindNodes(CallStatement).visit(subroutine.body)
+    for call in calls:
+        args=[arg for arg in call.arguments if isinstance(arg, Array)]
+        msg_call=""
+        for arg in args:
+            is_slice=False
+            is_section=False
+            is_scalar=False
+            
+            dims=arg.dimensions
+            for dim in dims:
+                if isinstance(dim, RangeIndex):
+                    if is_scalar: #scalar before ':' or 'X:Y'
+                        msg_call+=f"Array not contiguous : array {arg.name}; "
+                    if not any(dim.children): # ':'
+                        if is_section: # 'X:Y' before ':'
+                            msg_call+=f"Section before a slice forbidden : array {arg.name}; "
+                        is_slice=True
+                    else: # 'X:Y' 
+                        if dim.children[2]:
+                            msg_call+=f"Stride are forbidden : array {arg.name}; " #{dim.children}; "
+                        else:
+                            if is_section:
+                                msg_call+=f"Two slices for the same array are forbidden : array {arg.name}; "
+                            is_section=True
+                elif isinstance(dim, IntLiteral) or isinstance(dim, DeferredTypeSymbol): 
+                
+                    is_scalar=True
+                else:
+                    raise NotImplementedError(f"dim is neither slice, section or scalar : dim = {dim}")
+                
+        if msg_call:
+            msg+=f" *** Call : {call.name.name} => " + msg_call + "\n" 
+
+    if len(msg)!=0:
+        return(f"Routine :  {subroutine.name} => \n" + msg)
 
 
 #Dummy arguments of NPROMA subroutines ::: 
@@ -204,3 +252,4 @@ print(check6(subroutine))
 print(check7(subroutine))
 #Calling other NPROMA routines 
 print(check8(subroutine))
+print(check9(subroutine))
