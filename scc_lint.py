@@ -264,8 +264,60 @@ def check10(subroutine):
                             
     if len(module_vars) !=0:
         return(f"Routine :  {subroutine.name} => module variables : {module_vars} are forbidden")
-                
+#=====================================================================
+#=====================================================================
+#                 Modules variables in NPROMA routines
+#=====================================================================
+#=====================================================================
+def check11(subrouine):
+    """
+    Array syntax is forbidden, except for array initialization and array copy.
+    """               
+    verbose=False
+    msg=""
+    for assign in FindNodes(Assignment).visit(subroutine.body):
+        is_copy=False
+        is_init=False
+        is_array_syntax=False
+        for var in FindVariables().visit(assign.lhs):
+            if isinstance(var, Array):
+                for dim in var.dimensions:
+                    if dim == ':':
+                        is_array_syntax=True
+        if isinstance(assign.rhs, Array):
+            is_copy=True
+        if not FindVariables().visit(assign.rhs):
+            is_init=True
+    
+        if verbose: print(assign, is_array_syntax and not is_copy)
+        if verbose: print(assign, is_array_syntax and not is_init)
+        if (is_array_syntax and not is_copy) and (is_array_syntax and not is_init):
+            msg+=f" *** Some array syntax in {fgen(assign)}\n"
+     
+    if len(msg)!=0:
+        return(f"Routine :  {subroutine.name} => " + '\n' + msg)
         
+#def check12(subroutine):
+#TODO : check if constants init are done at the begining of the routine
+
+#=====================================================================
+#=====================================================================
+#                Functions in NPROMA routines
+#=====================================================================
+#=====================================================================
+#def check13(subroutine):
+#TODO : check if function are used
+#
+#A(...) =>  
+#    IF 1) A is an array declared in the routine; 2) member of a derived type; 3) starts with f : statement functions
+#    ELSE  A is a function => forbidden!
+# Optional :  Check for function if intfb.h; check for func.h
+
+#=====================================================================
+#=====================================================================
+#                Notations in NPROMA routines 
+#=====================================================================
+#=====================================================================
 
 
 #Dummy arguments of NPROMA subroutines ::: 
@@ -283,3 +335,9 @@ print(check8(subroutine))
 print(check9(subroutine))
 #Modules variables in NPROMA routines
 print(check10(subroutine))
+#Calculations in NPROMA routines
+print(check11(subroutine))
+#print((check12(subroutine))
+#Functions in NPROMA routines
+#print(check13(subroutine))
+
