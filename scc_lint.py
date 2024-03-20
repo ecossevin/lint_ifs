@@ -11,6 +11,7 @@ Dummy # ALLOCATABLE or POINTER attribute
 
 from loki import *
 
+import re
 
 s=Sourcefile.from_file("sub.F90")
 subroutine=s["SUB"]
@@ -247,7 +248,6 @@ def check10(subroutine):
     Checks if modules variables are used.
     Are allowed: modules variables in lst_import + ['LFLEXDIA','LMUSCLFA','NMUSCLFA'] + var starting with T or ending with TYPE, that is module var that are TYPES
     """
-    import re
     verbose=False
     lst_import=['GEOMETRY', 'MF_PHYS_TYPE', 'CPG_MISC_TYPE', 'CPG_DYN_TYPE', 'CPG_GPAR_TYPE', 'CPG_PHY_TYPE', 'CPG_SL2_TYPE', 'CPG_BNDS_TYPE', 'CPG_OPTS_TYPE', 'MF_PHYS_SURF_TYPE', 'FIELD_VARIABLES', 'MF_PHYS_BASE_STATE_TYPE', 'MF_PHYS_NEXT_STATE_TYPE', 'MODEL', 'JPIM', 'JPRB', 'LHOOK', 'DR_HOOK', 'JPHOOK', 'TYP_DDH']
     
@@ -305,13 +305,35 @@ def check11(subrouine):
 #                Functions in NPROMA routines
 #=====================================================================
 #=====================================================================
-#def check13(subroutine):
-#TODO : check if function are used
+def check13(subroutine):
+    """
+    Check if functions that aren't statement functions are used. 
+    """
 #
 #A(...) =>  
 #    IF 1) A is an array declared in the routine; 2) member of a derived type; 3) starts with f : statement functions
 #    ELSE  A is a function => forbidden!
 # Optional :  Check for function if intfb.h; check for func.h
+
+    lst_func=[]
+    lst_statement_func=[]
+    variables=[var for var in FindVariables().visit(subroutine.body)]
+    for var in variables:
+        if isinstance(var, Array):
+            is_array=var.name in subroutine.variable_map
+            is_derived_type='%' in var.name
+            is_statement_func=(re.match(r'^F', var.name))
+            if is_statement_func:
+                if not var.name in lst_statement_func:
+                    lst_statement_func.append(var.name)
+            if (not is_array) and (not is_derived_type) and (not is_statement_func):
+                if not var.name in lst_func:
+                    lst_func.append(var.name)
+    if len(lst_func)!=0:
+        return(f"Routine :  {subroutine.name} => {lst_func} are function calls.")
+                
+                
+            
 
 #=====================================================================
 #=====================================================================
@@ -339,5 +361,5 @@ print(check10(subroutine))
 print(check11(subroutine))
 #print((check12(subroutine))
 #Functions in NPROMA routines
-#print(check13(subroutine))
+print(check13(subroutine))
 
