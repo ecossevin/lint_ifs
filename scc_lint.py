@@ -28,7 +28,7 @@ def check1(subroutine):
     dummy_args=[var for var in subroutine.variables if var in subroutine.arguments]
     lst_alloc=[var.name for var in dummy_args if var.type.allocatable]
     lst_pointer=[var.name for var in dummy_args if var.type.pointer]
-   
+    
     msg=""
     if lst_alloc:
         msg=f"Routine :  {subroutine.name} => {len(lst_alloc)} dummy args allocatable : {lst_alloc} \n" 
@@ -36,7 +36,7 @@ def check1(subroutine):
         msg+=f"Routine :  {subroutine.name} => {len(lst_pointer)} dummy args pointer : {lst_pointer}"
     if len(msg)!=0:
         return(msg)
-
+    
 def check2(subroutine):
     """
     Checks if some dummy args have no INTENT.
@@ -61,7 +61,7 @@ def check3(subroutine):
         msg=f"Routine :  {subroutine.name} => {len(lst_assume_shape)} dummy args with assumed shapes: {lst_assume_shape}"
     if msg:
         return(msg)
-
+    
 def check4(subroutine):
     """
     Checks if YDMODEL, YDGEOMETRY have the INTENT(IN) attribute.
@@ -73,12 +73,12 @@ def check4(subroutine):
             variable=subroutine.variable_map[variable_name]
             if not variable.type.intent:
                 msg+=f"Routine :  {subroutine.name} => {variable_name} has no intent \n"
-
+    
             else:
                 if variable.type.intent!="in":
       
                     msg+=f"Routine :  {subroutine.name} => {variable_name} has wrong intent : {variable.type.intent} (not intent in) \n" 
-
+    
     if(len(msg)!=0):
         return(msg)
 #=====================================================================
@@ -94,14 +94,14 @@ def check5(subroutine):
     lst_horizontal=["NPROMA", "KLON"]
     lst_not_nproma=[]
     temps=[var for var in subroutine.variables if var not in subroutine.arguments and isinstance(var, Array)]
-   
+    
     for var in temps:
         if type(var.shape[0])==DeferredTypeSymbol: 
             if var.shape[0] not in lst_horizontal:
-                lst_not_nproma.append(var.name)    
-    if len(lst_not_nproma)!=0:
-        msg=f"Routine :  {subroutine.name} => {len(lst_not_nproma)} temp with leading diff than nproma: {lst_not_nproma}"
-        return(msg)   
+                    lst_not_nproma.append(var.name)    
+        if len(lst_not_nproma)!=0:
+            msg=f"Routine :  {subroutine.name} => {len(lst_not_nproma)} temp with leading diff than nproma: {lst_not_nproma}"
+            return(msg)   
 def check6(subroutine):
     """
     Checks if temporaries aren't ALLOCATABLE 
@@ -329,37 +329,125 @@ def check13(subroutine):
             if (not is_array) and (not is_derived_type) and (not is_statement_func):
                 if not var.name in lst_func:
                     lst_func.append(var.name)
+#    if opt:
+#        lst_no_import=[]
+#        c_import=[for imp in FindNodes(Import).visit(subroutine.spec) if imp.c_import]
+#        for func in lst_func:
+#            if func not in c_import:
+#                lst_no_import.append(func)
+#            else:
     if len(lst_func)!=0:
         return(f"Routine :  {subroutine.name} => {lst_func} are function calls.")
-                
-                
-            
-
 #=====================================================================
 #=====================================================================
 #                Notations in NPROMA routines 
 #=====================================================================
 #=====================================================================
+def check14(subroutine):
+    """
+    TODO : look for first idx of arrays,  maybe NPROMA is diff from one array to another
+    """
+    NPROMA=["NPROMA", "KLON","YDGEOMETRY%YRDIM%NPROMA","YDCPG_OPTS%KLON","D%NIJT"]
+    #BOUNDS=[["KST","KEND"],["YDCPG_BNDS%KST","YDCPG_BNDS%KEND"],["KIDIA","KFDIA"],["YDCPG_BNDS%KIDIA","KDCPG_BNDS%KFDIA"],["D%NIJB","D%NIJE"],["D%NIB","D%NIE"]]
+    #BOUNDS=[["KST","KEND"],["KIDIA","KFDIA"],["YDCPG_BNDS%KIDIA","KDCPG_BNDS%KFDIA"],["D%NIJB","D%NIJE"],["D%NIB","D%NIE"]]
+    BOUNDS=["KST/KEND","KIDIA/KFDIA","YDCPG_BNDS%KIDIA/KDCPG_BNDS%KFDIA","D%NIJB/D%NIJE","D%NIB/D%NIE"]
+    #BOUNDS=["KST/KEND","YDCPG_BNDS%KST/YDCPG_BNDS%KEND","KIDIA/KFDIA","YDCPG_BNDS%KIDIA/KDCPG_BNDS%KFDIA","D%NIJB/D%NIJE","D%NIB/D%NIE"]
+    JLON=["JLON","JPROF","JIJ","JI"]
 
+    msg=""
+    msg_nproma=""
+    verbose=False
 
-#Dummy arguments of NPROMA subroutines ::: 
-print(check1(subroutine))
-print(check2(subroutine))
-print(check3(subroutine))
-print(check4(subroutine))
-#Temporaries of NPROMA subroutines 
-print(check5(subroutine))
-print(check6(subroutine))
-#Pointers in NPROMA routines 
-print(check7(subroutine))
-#Calling other NPROMA routines 
-print(check8(subroutine))
-print(check9(subroutine))
-#Modules variables in NPROMA routines
-print(check10(subroutine))
-#Calculations in NPROMA routines
-print(check11(subroutine))
-#print((check12(subroutine))
-#Functions in NPROMA routines
-print(check13(subroutine))
+    lst_not_nproma=[]
+#    arrays=[var for var in subroutine.variables if var not in subroutine.arguments and isinstance(var, Array)]
+   
+#1- first check that first dim of arrays in NPROMA
+#!!!! CAN BE NONE NPROMA ARRAYS IN YDMODEL ?? !!!!!
+    #OR DIRECTLY CALL CHECK5
+    arrays=[var for var in FindVariables().visit(subroutine.body) if isinstance(var, Array)]
+    for var in arrays:
+        if verbose: print("var = ", var)
+        if var.shape:
+            if type(var.shape[0])==DeferredTypeSymbol: 
+                if var.shape[0].name not in NPROMA:
+                    msg_nproma+=f" *** var : {var.name} has none nproma dim as first dim : {var.shape[0].name}\n"
+                    
+#                lst_not_nproma.append(var.name)    
+#             else:
+#                 routine_nproma
+        else:
+            msg_nproma+=f" *** var : {var.name} has unknow first dim !!! \n"
+    print(msg_nproma) 
+    #if verbose: print(msg_nproma) 
+#2- Then insect each loop 
+    
+    loops=[loop for loop in FindNodes(Loop).visit(subroutine.body)]
+    for loop in loops:
+        #is_int=False 
+        msg_loop=""
+        
+        #Lower bound
+        if isinstance(loop.bounds.lower, IntLiteral):
+            #is_int=True
+            loop_bounds=str(loop.bounds.lower.value)
+        if isinstance(loop.bounds.lower, DeferredTypeSymbol):    
+            loop_bounds=loop.bounds.lower.name
+        #Upper bound
+        if isinstance(loop.bounds.upper, IntLiteral):
+            #is_int=True
+            loop_bounds=loop_bounds+"/"+str(loop.bounds.lower.value)
+        if isinstance(loop.bounds.upper, DeferredTypeSymbol):    
+            loop_bounds=loop_bounds+"/"+loop.bounds.upper.name
+        
+        loop_idx=loop.variable
+       # if loop_bounds not in 
+        loop_vars1=FindVariables().visit(loop.body)
+        loop_vars=[var for var in loop_vars1 if isinstance(var, Array)]       
+        is_bound=loop_bounds in BOUNDS
+        is_idx=loop_idx.name in JLON
 
+        for var in loop_vars:
+            if verbose: print("var3=", var)
+            if var.dimensions[0] != loop_idx: #isn't loop over the first dim, that means not a nproma loop if 1- is True      
+                break
+            else: #first dimension is the loop idx
+                if verbose: print("var2 = ", var)
+                is_nproma=var.shape[0].name in NPROMA
+
+            if not is_bound:
+                msg_loop+=f"wrong loop bounds : {loop_bounds}; "
+                is_bound=True
+            if not is_idx:
+                msg_loop+=f"wrong loop variable : {loop_idx.name}; "
+                is_idx=True
+            if not is_nproma:
+                msg_loop+=f"var : {var.name} has unknwown first dimension : {var.shape[0].name}; "
+        if len(msg_loop)!=0:
+            msg+=f" *** loop : {loop} => {msg_loop} \n"
+    if len(msg)!=0:
+        return(f"Routine :  {subroutine.name} => \n {msg}")
+        
+
+        
+##Dummy arguments of NPROMA subroutines ::: 
+#print(check1(subroutine))
+#print(check2(subroutine))
+#print(check3(subroutine))
+#print(check4(subroutine))
+##Temporaries of NPROMA subroutines 
+#print(check5(subroutine))
+#print(check6(subroutine))
+##Pointers in NPROMA routines 
+#print(check7(subroutine))
+##Calling other NPROMA routines 
+#print(check8(subroutine))
+#print(check9(subroutine))
+##Modules variables in NPROMA routines
+#print(check10(subroutine))
+##Calculations in NPROMA routines
+#print(check11(subroutine))
+##print((check12(subroutine))
+##Functions in NPROMA routines
+#print(check13(subroutine))
+##Notations in NPROMA routines
+print(check14(subroutine))
