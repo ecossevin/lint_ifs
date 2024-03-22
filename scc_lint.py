@@ -282,8 +282,11 @@ def check11(subrouine):
         for var in FindVariables().visit(assign.lhs):
             if isinstance(var, Array):
                 for dim in var.dimensions:
-                    if dim == ':':
+                    #if dim == ':':
+                    if isinstance(dim, RangeIndex):
+                        #if not any(dim.children): # ':'
                         is_array_syntax=True
+                            
         if isinstance(assign.rhs, Array):
             is_copy=True
         if not FindVariables().visit(assign.rhs):
@@ -470,6 +473,12 @@ def check15(subroutine):
 #=====================================================================
 #=====================================================================
 
+def check16(subroutine):
+    """
+    In order to check if gather scatter is used, we check if indirect addressing is used
+    """
+    
+
 #=====================================================================
 #=====================================================================
 #               Directives in NPROMA routines 
@@ -493,14 +502,14 @@ def check15(subroutine):
 ##Modules variables in NPROMA routines
 #print(check10(subroutine))
 ##Calculations in NPROMA routines
-#print(check11(subroutine))
+print(check11(subroutine))
 ##print((check12(subroutine))
 ##Functions in NPROMA routines
 #print(check13(subroutine))
 ##Notations in NPROMA routines
-print(check14(subroutine))
-#Calling NPROMA routines from an OpenMP parallel section 
-#skip
-#Reductions in NPROMA routines
-print(check15(subroutine))
-#Gather/scatter (aka pack/unpack) in NPROMA routines
+#print(check14(subroutine))
+##Calling NPROMA routines from an OpenMP parallel section 
+##skip
+##Reductions in NPROMA routines
+#print(check15(subroutine))
+##Gather/scatter (aka pack/unpack) in NPROMA routines
