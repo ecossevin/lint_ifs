@@ -345,7 +345,8 @@ def check13(subroutine):
 #=====================================================================
 def check14(subroutine):
     """
-    TODO : look for first idx of arrays,  maybe NPROMA is diff from one array to another
+    Checks if horizontal dimension, horizontal bounds and horizontal index have the right name.
+    names in NPROMA, BOUNDS and JLON.
     """
     NPROMA=["NPROMA", "KLON","YDGEOMETRY%YRDIM%NPROMA","YDCPG_OPTS%KLON","D%NIJT"]
     #BOUNDS=[["KST","KEND"],["YDCPG_BNDS%KST","YDCPG_BNDS%KEND"],["KIDIA","KFDIA"],["YDCPG_BNDS%KIDIA","KDCPG_BNDS%KFDIA"],["D%NIJB","D%NIJE"],["D%NIB","D%NIE"]]
@@ -427,8 +428,55 @@ def check14(subroutine):
     if len(msg)!=0:
         return(f"Routine :  {subroutine.name} => \n {msg}")
         
+#=====================================================================
+#=====================================================================
+#       Calling NPROMA routines from an OpenMP parallel section 
+#=====================================================================
+#=====================================================================
 
-        
+#ignore, just 4 places in the code with that
+
+#=====================================================================
+#=====================================================================
+#                  Reductions in NPROMA routines
+#=====================================================================
+#=====================================================================
+
+def check15(subroutine):
+    
+   """
+   Check if MINVAL or MAXVAL are used. 
+   SUM can be use, but the result of the sum musn't be used in a calculation, it will break reproductibility. 
+   """
+   calls=[]
+#   lst_sum=[]
+   msg=""
+   for assign in FindNodes(Assignment).visit(subroutine.body):
+       for call in FindInlineCalls().visit(assign):
+#           if (call.name=="SUM"):
+#               lst_sum.append(assign.lhs)
+   
+           print("assign = ", assign)
+           print("call.name = ", call.name)
+           if (call.name=="MINVAL") or (call.name=="MAXVAL"):
+               msg+="*** " + fgen(assign)+"\n"
+     
+   
+   if len(msg)!=0:
+       return(f"Routine :  {subroutine.name} => Some reductions were detected : \n {msg}")
+#=====================================================================
+#=====================================================================
+#       Gather/scatter (aka pack/unpack) in NPROMA routines 
+#=====================================================================
+#=====================================================================
+
+#=====================================================================
+#=====================================================================
+#               Directives in NPROMA routines 
+#=====================================================================
+#=====================================================================
+
+       
 ##Dummy arguments of NPROMA subroutines ::: 
 #print(check1(subroutine))
 #print(check2(subroutine))
@@ -451,3 +499,8 @@ def check14(subroutine):
 #print(check13(subroutine))
 ##Notations in NPROMA routines
 print(check14(subroutine))
+#Calling NPROMA routines from an OpenMP parallel section 
+#skip
+#Reductions in NPROMA routines
+print(check15(subroutine))
+#Gather/scatter (aka pack/unpack) in NPROMA routines
