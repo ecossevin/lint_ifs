@@ -1,0 +1,79 @@
+/home/cossevine/loki_env/bin/python3
+/home/cossevine/lint_ifs/test
+==> arpifs/adiab/lasure.F90 <==
+==> arpifs/adiab/lattex_dnt.F90 <==
+==> arpifs/adiab/lattex_tnt.F90 <==
+==> arpifs/adiab/gptf2_expl_2tl.F90 <==
+==> arpifs/utility/verdisint.F90 <==
+Routine :  VERDISINT => wrong use of some pointers : ['ZOPER', 'ZOPER', 'ZOPER', 'ZOPER', 'ZOPER', 'ZOPER', 'ZOPER', 'ZOPER', 'ZOPER', 'ZOPER', 'ZOPER', 'ZOPER', 'ZOPER', 'ZOPER', 'ZOPER']
+Routine :  VERDISINT => module variables : ['NULERR'] are forbidden
+==> arpifs/adiab/gp_spv.F90 <==
+==> arpifs/adiab/gpinislb_part1_expl.F90 <==
+Routine :  GPINISLB_PART1_EXPL => 
+ *** Some array syntax in PB2U1(KST:KEND, 1:YDGEOMETRY%YRDIMV%NFLEVG) = PUT9(KST:KEND, 1:YDGEOMETRY%YRDIMV%NFLEVG)*PTE
+ *** Some array syntax in PB2V1(KST:KEND, 1:YDGEOMETRY%YRDIMV%NFLEVG) = PVT9(KST:KEND, 1:YDGEOMETRY%YRDIMV%NFLEVG)*PTE
+ *** Some array syntax in PB2T1(KST:KEND, 1:YDGEOMETRY%YRDIMV%NFLEVG) = PTT9(KST:KEND, 1:YDGEOMETRY%YRDIMV%NFLEVG)*PTE
+ *** Some array syntax in PB2PD1(KST:KEND, 1:YDGEOMETRY%YRDIMV%NFLEVG) = PSPDT9(KST:KEND, 1:YDGEOMETRY%YRDIMV%NFLEVG)*PTE
+ *** Some array syntax in PB2VD1(KST:KEND, 1:YDGEOMETRY%YRDIMV%NFLEVG) = PSVDT9(KST:KEND, 1:YDGEOMETRY%YRDIMV%NFLEVG)*PTE
+ *** Some array syntax in PGMVNHX1(KST:KEND, 1:YDGEOMETRY%YRDIMV%NFLEVG) = PNHX9(KST:KEND, 1:YDGEOMETRY%YRDIMV%NFLEVG)*PTE
+ *** Some array syntax in PB2SP1(KST:KEND) = PSPT9(KST:KEND)*PTE
+
+==> arpifs/adiab/gpinislb_part3_expl.F90 <==
+Routine :  GPINISLB_PART3_EXPL => 
+ *** Some array syntax in PB2VVEL(KST:KEND, JLEV) = PVVEL0(KST:KEND, JLEV)*PZPRE0F(KST:KEND, JLEV)
+
+==> arpifs/adiab/gprt.F90 <==
+==> arpifs/adiab/gpcty_expl.F90 <==
+Routine :  GPCTY_EXPL => 
+ *** Some array syntax in ZVP(KST:KEND, JLEV) = PU(KST:KEND, JLEV)*PSPL(KST:KEND) + PV(KST:KEND, JLEV)*PSPM(KST:KEND)
+ *** Some array syntax in PDIVDP(KST:KEND, JLEV) = PD(KST:KEND, JLEV)*PDELP(KST:KEND, JLEV) + YDVAB%VDELB(JLEV)*ZVP(KST:KEND, JLEV) - PDPHYCTY(KST:KEND,  &
+& JLEV)*PDELP(KST:KEND, JLEV)
+ *** Some array syntax in PDIVDP(KST:KEND, JLEV) = PD(KST:KEND, JLEV)*PDELP(KST:KEND, JLEV) + YDVAB%VDELB(JLEV)*ZVP(KST:KEND, JLEV)
+ *** Some array syntax in ZSDIV(KST:KEND, JLEV) = PDIVDP(KST:KEND, JLEV)*YDVETA%VFE_RDETAH(JLEV)
+ *** Some array syntax in PEVEL(KST:KEND, JLEV) = PEVEL(KST:KEND, JLEV) + (1.0_JPRB - YDVAB%VBH(JLEV))*PEVT(KST:KEND)
+
+==> arpifs/adiab/gpgeo_expl.F90 <==
+==> arpifs/adiab/gpgrgeo_expl.F90 <==
+Routine :  GPGRGEO_EXPL => 
+ *** Some array syntax in ZNH1L(KST:KEND, JLEV) = -PRT(KST:KEND, JLEV)*PQCHAL(KST:KEND, JLEV)
+ *** Some array syntax in ZNH1M(KST:KEND, JLEV) = -PRT(KST:KEND, JLEV)*PQCHAM(KST:KEND, JLEV)
+
+==> arpifs/adiab/gphlwi.F90 <==
+==> arpifs/adiab/gphluv_expl.F90 <==
+==> arpifs/adiab/gpuvs.F90 <==
+==> arpifs/adiab/gpgrp_expl.F90 <==
+==> arpifs/adiab/gpxx.F90 <==
+==> arpifs/adiab/gp_tndlagadiab_uv.F90 <==
+Routine :  GP_TNDLAGADIAB_UV => 
+ *** Some array syntax in PTNDU_NOC(JROF, 1:YDGEOMETRY%YRDIMV%NFLEVG) = -PSGRTL(JROF, 1:YDGEOMETRY%YRDIMV%NFLEVG)
+ *** Some array syntax in PTNDV_NOC(JROF, 1:YDGEOMETRY%YRDIMV%NFLEVG) = -PSGRTM(JROF, 1:YDGEOMETRY%YRDIMV%NFLEVG)
+
+==> arpifs/adiab/gphpre_expl_vertfe0.F90 <==
+Routine :  GPHPRE_EXPL_VERTFE0 => wrong use of some pointers : ['ZDELP', 'ZLNPR', 'ZRDELP', 'ZALPH', 'ZRTGR', 'ZRPRE', 'ZRPP', 'ZDELP', 'ZLNPR', 'ZRDELP', 'ZALPH', 'ZRTGR', 'ZRPRE', 'ZRPP', 'ZLNPR', 'ZDELP', 'ZDELP', 'ZRDELP', 'ZALPH', 'ZRTGR', 'ZRDELP', 'ZRPRE', 'ZRPP', 'ZLNPR', 'ZDELP', 'ZRDELP', 'ZDELP', 'ZRDELP', 'ZLNPR', 'ZALPH', 'ZRDELP', 'ZRTGR', 'ZLNPR', 'ZRPRE', 'ZRPP', 'ZRPRE', 'ZRPRE', 'ZDELP', 'ZRDELP', 'ZDELP', 'ZRPP', 'ZRPP', 'ZLNPR', 'ZDELP', 'ZLNPR', 'ZRDELP', 'ZLNPR', 'ZALPH', 'ZRDELP', 'ZRTGR', 'ZLNPR', 'ZRPRE', 'ZDELP', 'ZDELP', 'ZRDELP', 'ZLNPR', 'ZDELP', 'ZLNPR', 'ZLNPR', 'ZDELP', 'ZALPH', 'ZRTGR', 'ZRDELP', 'ZRPRE', 'ZRPP', 'ZLNPR', 'ZRDELP', 'ZALPH', 'ZALPH', 'ZLNPR']
+Routine :  GPHPRE_EXPL_VERTFE0 => 
+ *** Some array syntax in ZPRE(KST:KEND) = YDVAB%VAH(0) + YDVAB%VBH(0)*PRESH(KST:KEND, KFLEV)
+ *** Some array syntax in ZLNPR(KST:KEND, 1) = LOG(PRESH(KST:KEND, 1) / TOPPRES)
+ *** Some array syntax in ZALPH(KST:KEND, 1) = YDCVER%RHYDR0
+ *** Some array syntax in ZPRE(KST:KEND) = 1._JPRB / PRESH(KST:KEND, IFIRST - 1)
+ *** Some array syntax in ZLNPR(KST:KEND, JL) = LOG(PRESH(KST:KEND, JL)*ZPRE(KST:KEND))
+ *** Some array syntax in ZPRE(KST:KEND) = 1._JPRB / PRESH(KST:KEND, JL)
+ *** Some array syntax in ZRPRE(KST:KEND, JL) = 1._JPRB / PRESH(KST:KEND, JL)
+ *** Some array syntax in ZLNPR(KST:KEND, 1) = 2._JPRB + YDCST%RCVD / YDCST%RD
+ *** Some array syntax in PRESF(KST:KEND, JL) = (PRESH(KST:KEND, JL - 1) + PRESH(KST:KEND, JL))*0.5_JPRB
+
+==> arpifs/adiab/gphpre_expl_vertfe1.F90 <==
+Routine :  GPHPRE_EXPL_VERTFE1 => wrong use of some pointers : ['ZDELP', 'ZLNPR', 'ZRDELP', 'ZALPH', 'ZRTGR', 'ZRPRE', 'ZRPP', 'ZDELP', 'ZPRESF', 'ZPRESF', 'ZDELP', 'ZLNPR', 'ZRDELP', 'ZDELP', 'ZPRESF', 'ZALPH', 'ZRTGR']
+==> arpifs/adiab/gphpre_expl.F90 <==
+Routine :  GPHPRE_EXPL => 
+ *** Some array syntax in PRESH(KST:KEND, JL) = YDVAB%VAH(JL) + YDVAB%VBH(JL)*PRESH(KST:KEND, KFLEV)
+
+==> arpifs/adiab/gpgrxyb_expl.F90 <==
+==> arpifs/adiab/gpgw.F90 <==
+Routine :  GPGW => wrong use of some pointers : ['ZGDW', 'ZGDW', 'ZGDW', 'ZGDW', 'ZGDW', 'ZGDW', 'ZGDW']
+Routine :  GPGW => 
+ *** Some array syntax in PGWH(KST:KEND, KFLEV) = PUS(KST:KEND)*POROGL(KST:KEND) + PVS(KST:KEND)*POROGM(KST:KEND)
+ *** Some array syntax in ZIN(KST:KEND, JLEV) = -ZGDW(KST:KEND, JLEV)*YDGEOMETRY%YRVERT_GEOM%YRVETA%VFE_RDETAH(JLEV)
+
+==> arpifs/adiab/gpmpfc_expl_part1.F90 <==
+==> arpifs/phys_dmn/dprecips_xfu.F90 <==
+==> arpifs/dia/meanwind_xfu.F90 <==

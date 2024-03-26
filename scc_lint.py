@@ -12,9 +12,24 @@ Dummy # ALLOCATABLE or POINTER attribute
 from loki import *
 
 import re
+import sys
+import copy
 
-s=Sourcefile.from_file("sub.F90")
-subroutine=s["SUB"]
+
+debug=False
+if debug:
+    s=Sourcefile.from_file("sub.F90")
+    subroutine=s["SUB"]
+else:
+    file=sys.argv[1]
+    s=Sourcefile.from_file(file)
+    subroutine=s.subroutines[0]
+    resolve_associates(subroutine)
+#    print(fgen(subroutine.body))
+
+import inspect
+verbose=False
+
 
 #=====================================================================
 #=====================================================================
@@ -34,6 +49,8 @@ def check1(subroutine):
         msg=f"Routine :  {subroutine.name} => {len(lst_alloc)} dummy args allocatable : {lst_alloc} \n" 
     if lst_pointer:
         msg+=f"Routine :  {subroutine.name} => {len(lst_pointer)} dummy args pointer : {lst_pointer}"
+    frame = inspect.currentframe()
+    if verbose: print("The name of function is : ", frame.f_code.co_name)
     if len(msg)!=0:
         return(msg)
     
@@ -41,25 +58,32 @@ def check2(subroutine):
     """
     Checks if some dummy args have no INTENT.
     """
+    msg=""
     lst_no_intent=[var.name for var in subroutine.arguments if not var.type.intent]
     if lst_no_intent:
         msg=f"Routine :  {subroutine.name} => {len(lst_no_intent)} dummy args with no intent : {lst_no_intent}"
-    if msg:
+    frame = inspect.currentframe()
+    if verbose: print("The name of function is : ", frame.f_code.co_name)
+    if len(msg)!=0:
         return(msg)
 def check3(subroutine):
     """
     Checks if some dummy args assumed shapes.
     """
+    msg=""
     def is_assume(shapes):
         if shapes:
             for shape in shapes:
                 if type(shape)==RangeIndex:
-                    return(True)
+                    if (not any(shape.children)):
+                        return(True)
             return(False)
-    lst_assume_shape=[var.name for var in subroutine.variables if (is_assume(var.type.shape))]
+    lst_assume_shape=[var.name for var in subroutine.variables if (is_assume(var.type.shape) and not var.type.pointer)]
     if lst_assume_shape:
         msg=f"Routine :  {subroutine.name} => {len(lst_assume_shape)} dummy args with assumed shapes: {lst_assume_shape}"
-    if msg:
+    frame = inspect.currentframe()
+    if verbose: print("The name of function is : ", frame.f_code.co_name)
+    if len(msg)!=0:
         return(msg)
     
 def check4(subroutine):
@@ -79,6 +103,8 @@ def check4(subroutine):
       
                     msg+=f"Routine :  {subroutine.name} => {variable_name} has wrong intent : {variable.type.intent} (not intent in) \n" 
     
+    frame = inspect.currentframe()
+    if verbose: print("The name of function is : ", frame.f_code.co_name)
     if(len(msg)!=0):
         return(msg)
 #=====================================================================
@@ -91,17 +117,20 @@ def check5(subroutine):
     """
     Checks that NPROMA is the first dimension of temporaries, if not dim must be known at compile time.
     """
-    lst_horizontal=["NPROMA", "KLON"]
+    NPROMA=["NPROMA", "KLON","YDGEOMETRY%YRDIM%NPROMA","YDCPG_OPTS%KLON","D%NIJT","KPROMA"]
     lst_not_nproma=[]
     temps=[var for var in subroutine.variables if var not in subroutine.arguments and isinstance(var, Array)]
     
     for var in temps:
         if type(var.shape[0])==DeferredTypeSymbol: 
-            if var.shape[0] not in lst_horizontal:
+            if var.shape[0] not in NPROMA:
+            #if var.shape[0] not in lst_horizontal:
                     lst_not_nproma.append(var.name)    
-        if len(lst_not_nproma)!=0:
-            msg=f"Routine :  {subroutine.name} => {len(lst_not_nproma)} temp with leading diff than nproma: {lst_not_nproma}"
-            return(msg)   
+    frame = inspect.currentframe()
+    if verbose: print("The name of function is : ", frame.f_code.co_name)
+    if len(lst_not_nproma)!=0:
+        msg=f"Routine :  {subroutine.name} => {len(lst_not_nproma)} temp with leading diff than nproma: {lst_not_nproma}"
+        return(msg)   
 def check6(subroutine):
     """
     Checks if temporaries aren't ALLOCATABLE 
@@ -112,6 +141,8 @@ def check6(subroutine):
     msg=""
     if lst_alloc:
         msg=f"Routine :  {subroutine.name} => {len(lst_alloc)} temp allocatable : {lst_alloc}" 
+    frame = inspect.currentframe()
+    if verbose: print("The name of function is : ", frame.f_code.co_name)
     if len(msg)!=0:
         return(msg)
 #=====================================================================
@@ -133,13 +164,10 @@ def check7(subroutine):
     pt_asss=[]
     for ass in asss:
         for var in FindVariables(Array).visit(ass):
-            if verbose: print("var=", var)
-            if verbose: print("ass=", ass)
             if var.type.pointer:
                 pt_asss.append(ass)
                 break
        
-    if verbose: print("pt_asss=", pt_asss)
     conds=FindNodes(Conditional).visit(subroutine.body)
     for cond in conds:
         calls=FindInlineCalls().visit(cond.condition)
@@ -161,9 +189,11 @@ def check7(subroutine):
         for var in variables:
             if var.type.pointer:
                 pointers.append(var.name)
+    frame = inspect.currentframe()
+    if verbose: print("The name of function is : ", frame.f_code.co_name)
     if pt_asss:
-        msg=f"Routine :  {subroutine.name} => wrong use of some pointers : {pointers}"
-        return(msg)
+         msg=f"Routine :  {subroutine.name} => wrong use of some pointers : {pointers}"
+         return(msg)
 #=====================================================================
 #=====================================================================
 #                   Calling other NPROMA routines 
@@ -174,19 +204,23 @@ def check8(subroutine):
     """
     Checks if all routines call from the NPROMA routine are declared using an interface block.
     """
-    verbose=True
+    ignore_calls=['NEW_ADD_FIELD_3D','DR_HOOK','ADD_FIELD_3D']
+    #verbose=True
+    verbose=False
 #    exception="PXSL"
 #    exceptions=[exception]
     calls=FindNodes(CallStatement).visit(subroutine.body)
     c_import=[imp.module.replace('.intfb.h','') for imp in FindNodes(Import).visit(subroutine.spec) if imp.c_import]
-    new_calls=calls
-    if verbose: print("calls = ", calls)
-    if verbose: print("c_import = ", c_import)
+    new_calls=copy.deepcopy(calls)
     for call in calls:
-        if call in calls:
+        if call in new_calls:
             if call.name.name.lower() in c_import:
                 new_calls.remove(call)
     new_calls=[call.name.name for call in new_calls]
+    new_calls=[call for call in new_calls if call not in ignore_calls]
+    #new_calls=[call for call in new_calls if call!='DR_HOOK']
+    frame = inspect.currentframe()
+    if verbose: print("The name of function is : ", frame.f_code.co_name)
     if new_calls:
         msg=f"Routine :  {subroutine.name} => some subroutines call from the subroutine aren't declared using an interface block : {new_calls}"
         return(msg)
@@ -227,15 +261,19 @@ def check9(subroutine):
                             if is_section:
                                 msg_call+=f"Two slices for the same array are forbidden : array {arg.name}; "
                             is_section=True
-                elif isinstance(dim, IntLiteral) or isinstance(dim, DeferredTypeSymbol): 
+                elif (isinstance(dim, IntLiteral) or isinstance(dim, DeferredTypeSymbol) or isinstance(dim, Scalar)): 
                 
                     is_scalar=True
                 else:
+                    print("arg = ", arg)
+                    print("dim =", dim)
                     raise NotImplementedError(f"dim is neither slice, section or scalar : dim = {dim}")
                 
         if msg_call:
             msg+=f" *** Call : {call.name.name} => " + msg_call + "\n" 
 
+    frame = inspect.currentframe()
+    if verbose: print("The name of function is : ", frame.f_code.co_name)
     if len(msg)!=0:
         return(f"Routine :  {subroutine.name} => \n" + msg)
 #=====================================================================
@@ -249,19 +287,22 @@ def check10(subroutine):
     Are allowed: modules variables in lst_import + ['LFLEXDIA','LMUSCLFA','NMUSCLFA'] + var starting with T or ending with TYPE, that is module var that are TYPES
     """
     verbose=False
-    lst_import=['GEOMETRY', 'MF_PHYS_TYPE', 'CPG_MISC_TYPE', 'CPG_DYN_TYPE', 'CPG_GPAR_TYPE', 'CPG_PHY_TYPE', 'CPG_SL2_TYPE', 'CPG_BNDS_TYPE', 'CPG_OPTS_TYPE', 'MF_PHYS_SURF_TYPE', 'FIELD_VARIABLES', 'MF_PHYS_BASE_STATE_TYPE', 'MF_PHYS_NEXT_STATE_TYPE', 'MODEL', 'JPIM', 'JPRB', 'LHOOK', 'DR_HOOK', 'JPHOOK', 'TYP_DDH']
+    lst_import=['GEOMETRY', 'MF_PHYS_TYPE', 'CPG_MISC_TYPE', 'CPG_DYN_TYPE', 'CPG_GPAR_TYPE', 'CPG_PHY_TYPE', 'CPG_SL2_TYPE', 'CPG_BNDS_TYPE', 'CPG_OPTS_TYPE', 'MF_PHYS_SURF_TYPE', 'FIELD_VARIABLES', 'MF_PHYS_BASE_STATE_TYPE', 'MF_PHYS_NEXT_STATE_TYPE', 'MODEL', 'JPIM', 'JPRB', 'LHOOK', 'DR_HOOK', 'JPHOOK', 'TYP_DDH','JPRD','NEW_ADD_FIELD_3D','ADD_FIELD_3D']
     
     module_vars=[]
     imports=FindNodes(Import).visit(subroutine.spec) 
     for imp in imports:
         if imp.symbols:
             for symbol in imp.symbols:
-                if verbose: print(symbol)
                 if symbol not in lst_import:
                     if not (re.match(r'^T', symbol.name) or re.search(r'TYPE$', symbol.name)):
                         if symbol.name not in ['LFLEXDIA','LMUSCLFA','NMUSCLFA']:
                             module_vars.append(symbol.name)
                             
+    frame = inspect.currentframe()
+    if verbose: print("The name of function is : ", frame.f_code.co_name)
+    frame = inspect.currentframe()
+    if verbose: print("The name of function is : ", frame.f_code.co_name)
     if len(module_vars) !=0:
         return(f"Routine :  {subroutine.name} => module variables : {module_vars} are forbidden")
 #=====================================================================
@@ -287,16 +328,22 @@ def check11(subroutine):
                         #if not any(dim.children): # ':'
                         is_array_syntax=True
                             
+
         if isinstance(assign.rhs, Array):
             is_copy=True
-        if not FindVariables().visit(assign.rhs):
+        if (isinstance(assign.rhs, FloatLiteral) or isinstance(assign.rhs, IntLiteral) or isinstance(assign.rhs, LogicLiteral)):
+#        if not FindVariables().visit(assign.rhs):
             is_init=True
+#todo if rhs is a big expression of constants 
+        if (isinstance(assign.rhs, Product)):
+            if assign.rhs.children[0]==-1 and isinstance(assign.rhs.children[1], FloatLiteral):
+                is_init=True
     
-        if verbose: print(assign, is_array_syntax and not is_copy)
-        if verbose: print(assign, is_array_syntax and not is_init)
         if (is_array_syntax and not is_copy) and (is_array_syntax and not is_init):
             msg+=f" *** Some array syntax in {fgen(assign)}\n"
      
+    frame = inspect.currentframe()
+    if verbose: print("The name of function is : ", frame.f_code.co_name)
     if len(msg)!=0:
         return(f"Routine :  {subroutine.name} => " + '\n' + msg)
         
@@ -339,6 +386,8 @@ def check13(subroutine):
 #            if func not in c_import:
 #                lst_no_import.append(func)
 #            else:
+    frame = inspect.currentframe()
+    if verbose: print("The name of function is : ", frame.f_code.co_name)
     if len(lst_func)!=0:
         return(f"Routine :  {subroutine.name} => {lst_func} are function calls.")
 #=====================================================================
@@ -351,37 +400,38 @@ def check14(subroutine):
     Checks if horizontal dimension, horizontal bounds and horizontal index have the right name.
     names in NPROMA, BOUNDS and JLON.
     """
-    NPROMA=["NPROMA", "KLON","YDGEOMETRY%YRDIM%NPROMA","YDCPG_OPTS%KLON","D%NIJT"]
-    #BOUNDS=[["KST","KEND"],["YDCPG_BNDS%KST","YDCPG_BNDS%KEND"],["KIDIA","KFDIA"],["YDCPG_BNDS%KIDIA","KDCPG_BNDS%KFDIA"],["D%NIJB","D%NIJE"],["D%NIB","D%NIE"]]
-    #BOUNDS=[["KST","KEND"],["KIDIA","KFDIA"],["YDCPG_BNDS%KIDIA","KDCPG_BNDS%KFDIA"],["D%NIJB","D%NIJE"],["D%NIB","D%NIE"]]
+    NPROMA=["NPROMA", "KLON","YDGEOMETRY%YRDIM%NPROMA","YDCPG_OPTS%KLON","D%NIJT","KPROMA"]
     BOUNDS=["KST/KEND","KIDIA/KFDIA","YDCPG_BNDS%KIDIA/KDCPG_BNDS%KFDIA","D%NIJB/D%NIJE","D%NIB/D%NIE"]
-    #BOUNDS=["KST/KEND","YDCPG_BNDS%KST/YDCPG_BNDS%KEND","KIDIA/KFDIA","YDCPG_BNDS%KIDIA/KDCPG_BNDS%KFDIA","D%NIJB/D%NIJE","D%NIB/D%NIE"]
-    JLON=["JLON","JPROF","JIJ","JI"]
+    JLON=["JLON","JROF","JIJ","JI"]
 
     msg=""
     msg_nproma=""
     verbose=False
+#    verbose=True
 
     lst_not_nproma=[]
 #    arrays=[var for var in subroutine.variables if var not in subroutine.arguments and isinstance(var, Array)]
    
 #1- first check that first dim of arrays in NPROMA
-#!!!! CAN BE NONE NPROMA ARRAYS IN YDMODEL ?? !!!!!
+#!!!! CAN BE NONE NPROMA ARRAYS IN YDVARS ?? !!!!!
     #OR DIRECTLY CALL CHECK5
     arrays=[var for var in FindVariables().visit(subroutine.body) if isinstance(var, Array)]
     for var in arrays:
-        if verbose: print("var = ", var)
         if var.shape:
-            if type(var.shape[0])==DeferredTypeSymbol: 
+            if type(var.shape[0])==(DeferredTypeSymbol or Scalar): 
                 if var.shape[0].name not in NPROMA:
-                    msg_nproma+=f" *** var : {var.name} has none nproma dim as first dim : {var.shape[0].name}\n"
+                    if verbose: msg_nproma+=f" *** var : {var.name} has none nproma dim as first dim : {var.shape[0].name}\n"
                     
-#                lst_not_nproma.append(var.name)    
-#             else:
-#                 routine_nproma
+                    lst_not_nproma.append(var.name)    
+            else:
+                lst_not_nproma.append(var.name)    
+                if verbose: msg_nproma+=f" *** var : {var.name} has range indx first dim !!! \n"
         else:
-            msg_nproma+=f" *** var : {var.name} has unknow first dim !!! \n"
-    print(msg_nproma) 
+            #derived type will arrive here : TODO ::: add the index with the derived types.
+            lst_not_nproma.append(var.name) 
+            if verbose: msg_nproma+=f" *** var : {var.name} has unknow first dim !!! \n"
+    if len(msg_nproma)!=0:
+        print(msg_nproma) 
     #if verbose: print(msg_nproma) 
 #2- Then insect each loop 
     
@@ -390,18 +440,27 @@ def check14(subroutine):
         #is_int=False 
         msg_loop=""
         
+#        print("loop = ", loop)
+#        print("loop_bounds = ", loop.bounds)
         #Lower bound
-        if isinstance(loop.bounds.lower, IntLiteral):
-            #is_int=True
-            loop_bounds=str(loop.bounds.lower.value)
-        if isinstance(loop.bounds.lower, DeferredTypeSymbol):    
-            loop_bounds=loop.bounds.lower.name
-        #Upper bound
-        if isinstance(loop.bounds.upper, IntLiteral):
-            #is_int=True
-            loop_bounds=loop_bounds+"/"+str(loop.bounds.lower.value)
-        if isinstance(loop.bounds.upper, DeferredTypeSymbol):    
-            loop_bounds=loop_bounds+"/"+loop.bounds.upper.name
+#        if isinstance(loop.bounds.lower, IntLiteral):
+#            #is_int=True
+#            loop_bounds=str(loop.bounds.lower.value)
+#        if isinstance(loop.bounds.lower, DeferredTypeSymbol):    
+#            loop_bounds=loop.bounds.lower.name
+#        if isinstance(loop.bounds.lower, Scalar):    
+#            loop_bounds=loop.bounds.lower.name
+#        #Upper bound
+#        if isinstance(loop.bounds.upper, IntLiteral):
+#            #is_int=True
+#            loop_bounds=loop_bounds+"/"+str(loop.bounds.upper.value)
+#        if isinstance(loop.bounds.upper, DeferredTypeSymbol):    
+#            loop_bounds=loop_bounds+"/"+loop.bounds.upper.name
+#        if isinstance(loop.bounds.upper, Scalar):    
+#            loop_bounds=loop.bounds.upper.name
+
+        loop_bounds=str(loop.bounds.lower)+'/'+str(loop.bounds.upper)
+
         
         loop_idx=loop.variable
        # if loop_bounds not in 
@@ -411,23 +470,22 @@ def check14(subroutine):
         is_idx=loop_idx.name in JLON
 
         for var in loop_vars:
-            if verbose: print("var3=", var)
-            if var.dimensions[0] != loop_idx: #isn't loop over the first dim, that means not a nproma loop if 1- is True      
-                break
-            else: #first dimension is the loop idx
-                if verbose: print("var2 = ", var)
-                is_nproma=var.shape[0].name in NPROMA
+            if var.name not in lst_not_nproma:
+                if var.dimensions[0] != loop_idx: #isn't loop over the first dim. And that means not a nproma loop if 1- is True      
+                    break
+                else: #first dimension is the loop idx
+                    is_nproma=var.shape[0].name in NPROMA
 
-            if not is_bound:
-                msg_loop+=f"wrong loop bounds : {loop_bounds}; "
-                is_bound=True
-            if not is_idx:
-                msg_loop+=f"wrong loop variable : {loop_idx.name}; "
-                is_idx=True
-            if not is_nproma:
-                msg_loop+=f"var : {var.name} has unknwown first dimension : {var.shape[0].name}; "
+                    is_bound=True
+                if not is_idx:
+                    msg_loop+=f"wrong loop variable : {loop_idx.name}; "
+                    is_idx=True
+                if not is_nproma:
+                    msg_loop+=f"var : {var.name} has unknwown first dimension : {var.shape[0].name}; "
         if len(msg_loop)!=0:
             msg+=f" *** loop : {loop} => {msg_loop} \n"
+    frame = inspect.currentframe()
+    if verbose: print("The name of function is : ", frame.f_code.co_name)
     if len(msg)!=0:
         return(f"Routine :  {subroutine.name} => \n {msg}")
         
@@ -459,12 +517,11 @@ def check15(subroutine):
 #           if (call.name=="SUM"):
 #               lst_sum.append(assign.lhs)
    
-           print("assign = ", assign)
-           print("call.name = ", call.name)
            if (call.name=="MINVAL") or (call.name=="MAXVAL"):
                msg+="*** " + fgen(assign)+"\n"
      
-   
+   frame = inspect.currentframe()
+   if verbose: print("The name of function is : ", frame.f_code.co_name)
    if len(msg)!=0:
        return(f"Routine :  {subroutine.name} => Some reductions were detected : \n {msg}")
 #=====================================================================
@@ -488,6 +545,8 @@ def check16(subroutine):
                     if isinstance(dim, Array):
                         msg+=f"*** {fgen(var)}; "
                     break
+    frame = inspect.currentframe()
+    if verbose: print("The name of function is : ", frame.f_code.co_name)
     if(len(msg))!=0:
         return(f"Routine :  {subroutine.name} => Some indirect addressing was detected: \n {msg}")
 
@@ -497,32 +556,38 @@ def check16(subroutine):
 #=====================================================================
 #=====================================================================
 
+    
+def show(routine, subroutine):
+    c=routine(subroutine)
+    if c:
+        print(c)
+
        
-##Dummy arguments of NPROMA subroutines ::: 
-#print(check1(subroutine))
-#print(check2(subroutine))
-#print(check3(subroutine))
-#print(check4(subroutine))
-##Temporaries of NPROMA subroutines 
-#print(check5(subroutine))
-#print(check6(subroutine))
-##Pointers in NPROMA routines 
-#print(check7(subroutine))
-##Calling other NPROMA routines 
-#print(check8(subroutine))
-#print(check9(subroutine))
-##Modules variables in NPROMA routines
-#print(check10(subroutine))
-##Calculations in NPROMA routines
-#print(check11(subroutine))
-##print((check12(subroutine))
-##Functions in NPROMA routines
-#print(check13(subroutine))
-##Notations in NPROMA routines
-#print(check14(subroutine))
-##Calling NPROMA routines from an OpenMP parallel section 
-##skip
-##Reductions in NPROMA routines
-#print(check15(subroutine))
-##Gather/scatter (aka pack/unpack) in NPROMA routines
-print(check16(subroutine))
+#Dummy arguments of NPROMA subroutines ::: 
+show(check1,subroutine)
+show(check2,subroutine)
+show(check3,subroutine)
+show(check4,subroutine)
+#Temporaries of NPROMA subroutines 
+show(check5,subroutine)
+show(check6,subroutine)
+#Pointers in NPROMA routines 
+show(check7,subroutine)
+#Calling other NPROMA routines 
+show(check8,subroutine)
+show(check9,subroutine)
+#Modules variables in NPROMA routines
+show(check10,subroutine)
+#Calculations in NPROMA routines
+show(check11,subroutine)
+#show(check12,subroutine)
+#Functions in NPROMA routines
+show(check13,subroutine)
+#Notations in NPROMA routines
+show(check14,subroutine)
+#Calling NPROMA routines from an OpenMP parallel section 
+#skip
+#Reductions in NPROMA routines
+show(check15,subroutine)
+#Gather/scatter (aka pack/unpack) in NPROMA routines
+show(check16,subroutine)
