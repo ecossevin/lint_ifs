@@ -269,7 +269,7 @@ def check10(subroutine):
 #                 Modules variables in NPROMA routines
 #=====================================================================
 #=====================================================================
-def check11(subrouine):
+def check11(subroutine):
     """
     Array syntax is forbidden, except for array initialization and array copy.
     """               
@@ -477,7 +477,19 @@ def check16(subroutine):
     """
     In order to check if gather scatter is used, we check if indirect addressing is used
     """
-    
+    msg=""
+    for var in FindVariables().visit(subroutine.body):
+        if isinstance(var, Array):
+
+            is_array=var.name_parts[0] in subroutine.variable_map #don't take functions 
+            
+            if is_array:
+                for dim in var.dimensions:
+                    if isinstance(dim, Array):
+                        msg+=f"*** {fgen(var)}; "
+                    break
+    if(len(msg))!=0:
+        return(f"Routine :  {subroutine.name} => Some indirect addressing was detected: \n {msg}")
 
 #=====================================================================
 #=====================================================================
@@ -502,7 +514,7 @@ def check16(subroutine):
 ##Modules variables in NPROMA routines
 #print(check10(subroutine))
 ##Calculations in NPROMA routines
-print(check11(subroutine))
+#print(check11(subroutine))
 ##print((check12(subroutine))
 ##Functions in NPROMA routines
 #print(check13(subroutine))
@@ -513,3 +525,4 @@ print(check11(subroutine))
 ##Reductions in NPROMA routines
 #print(check15(subroutine))
 ##Gather/scatter (aka pack/unpack) in NPROMA routines
+print(check16(subroutine))
