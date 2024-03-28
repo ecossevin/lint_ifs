@@ -16,6 +16,8 @@ import sys
 import copy
 
 
+is_index=False #if no index, YDVARS%VAR1%VAR2 is unkown
+is_index=True #if there is an index, YDVARS%VAR1%VAR2 is known
 debug=False
 if debug:
     s=Sourcefile.from_file("sub.F90")
