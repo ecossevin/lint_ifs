@@ -17,7 +17,7 @@ import copy
 
 
 is_index=False #if no index, YDVARS%VAR1%VAR2 is unkown
-is_index=True #if there is an index, YDVARS%VAR1%VAR2 is known
+#is_index=True #if there is an index, YDVARS%VAR1%VAR2 is known
 debug=False
 if debug:
     s=Sourcefile.from_file("sub.F90")
@@ -33,9 +33,9 @@ import inspect
 verbose=False
 
 def is_derive(var):
-    if isinstance(var, DeferredTypeSymbol):
-        if len(var.name_parts)>1:
-            return(True)
+#    if isinstance(var, DeferredTypeSymbol):
+    if len(var.name_parts)>1:
+        return(True)
     return(False)
 
 def get_type(var):
@@ -80,7 +80,7 @@ def check2(subroutine):
         return(msg)
 def check3(subroutine):
     """
-    Checks if some dummy args assumed shapes.
+    Checks if some dummy args (that aren't pointers) have assumed shapes.
     """
     msg=""
     def is_assume(shapes):
@@ -128,20 +128,26 @@ def check4(subroutine):
 def check5(subroutine):
     """
     Checks that NPROMA is the first dimension of temporaries, if not dim must be known at compile time.
+    if var is a pointer : ignore first dim check.
     """
     NPROMA=["NPROMA", "KLON","YDGEOMETRY%YRDIM%NPROMA","YDCPG_OPTS%KLON","D%NIJT","KPROMA"]
-    lst_not_nproma=[]
+    lst_not_nproma_=[]
     temps=[var for var in subroutine.variables if var not in subroutine.arguments and isinstance(var, Array)]
     
     for var in temps:
-        if type(var.shape[0])==DeferredTypeSymbol: 
-            if var.shape[0] not in NPROMA:
-            #if var.shape[0] not in lst_horizontal:
-                    lst_not_nproma.append(var.name)    
+        if isinstance(var.shape[0], DeferredTypeSymbol) or isinstance(var.shape[0], Scalar):
+            if var.shape[0].name not in NPROMA:
+                lst_not_nproma_.append(var)    
+        elif not isinstance(var.shape[0], IntLiteral): 
+            lst_not_nproma_.append(var)    
+
+    lst_not_nproma_pt=[var.name for var in lst_not_nproma_ if var.type.pointer]
+    lst_not_nproma=[var.name for var in lst_not_nproma_ if not var.type.pointer]
     frame = inspect.currentframe()
     if verbose: print("The name of function is : ", frame.f_code.co_name)
     if len(lst_not_nproma)!=0:
-        msg=f"Routine :  {subroutine.name} => {len(lst_not_nproma)} temp with leading diff than nproma: {lst_not_nproma}"
+        msg=f"Routine :  {subroutine.name} => {len(lst_not_nproma)} temp with leading dim diff than nproma: {lst_not_nproma}"
+        if verbose: msg=msg + f"\n {len(lst_not_nproma_pt)} POINTERS temp with leading dim diff than nproma: {lst_not_proma_pt}"
         return(msg)   
 def check6(subroutine):
     """
@@ -165,7 +171,7 @@ def check6(subroutine):
 
 def check7(subroutine):
     """
-    Pointers are forbidden, except for handling optional arguments. For instance : 
+    Pointers are forbidden, except: for handling optional arguments and if first dim isn't NPROMA.
     """
     verbose=False
     #verbose=True
@@ -173,19 +179,18 @@ def check7(subroutine):
     pt=[var for var in temps if var.type.pointer]
     pt_name=[var.name for var in temps if var.type.pointer]
     asss=FindNodes(Assignment).visit(subroutine.body) #when pt assignment found in an IF(PRESENT), rm the ass for the list. At the end, look for pt assignment in the list :  1)If the list is empty, that means that pointers were used where they are allowed to be used. 2)Else, rule not respected
-    pt_asss=[]
-    for ass in asss:
-        for var in FindVariables(Array).visit(ass):
-            if var.type.pointer:
-                pt_asss.append(ass)
-                break
+    pt_asss_derive=[]
+    msg=""
+    
+
+    pt_asss=[ass for ass in FindNodes(Assignment).visit(subroutine.body) if ass.ptr]
        
     conds=FindNodes(Conditional).visit(subroutine.body)
     for cond in conds:
         calls=FindInlineCalls().visit(cond.condition)
         calls=[call for call in calls if call.name=="PRESENT"]
         if calls:
-            cond_asss=FindNodes(Assignment).visit(cond)
+            cond_asss=[ass for ass in FindNodes(Assignment).visit(cond) if ass.ptr]
            # is_pt=True #check is lhs = PT in both IF and ELSE blk
             for cond_ass in cond_asss:
                 if cond_ass.lhs.name in pt_name: #and is_pt:
@@ -194,18 +199,72 @@ def check7(subroutine):
             #    else:
             #        is_pt=False
                      
+    NPROMA=["NPROMA", "KLON","YDGEOMETRY%YRDIM%NPROMA","YDCPG_OPTS%KLON","D%NIJT","KPROMA"]
+#    new_pt_asss=copy.deepcopy(pt_asss)
+#    for ass in pt_asss:
+#==================================
+# 1) '=>' is allowed if first dim isn't in NPROMA
+# 2) If first dim is unknown : derive type; print message with ??? XX ???  
+#==================================
+    size_asss=len(pt_asss)
+    idx_ass=0
+    idx2=0
+    while idx_ass<size_asss:
+        ass=pt_asss[idx_ass+idx2]
+        if ass.lhs.type.pointer:
+            for var in FindVariables().visit(ass.rhs): 
+                if is_derive(var):
+                    if is_index:
+                        #if is_derive(var):
+                            #check if var.shape[0] in NPROMA, then remove (or not) ass from pt_asss
+                        raise NotImplementedError("looking for derived type shape in the index isn't implemented yet!")
+                    else:
+                        #new_pt_asss.remove(ass)
+                        idx2-=1
+                        pt_asss.remove(ass)
+                        pt_asss_derive.append(ass)    
+                        break
+                else: #if not derive type
+                    if isinstance(var, Array):
+                        if var.shape[0] not in NPROMA:
+                            idx2-=1
+                            pt_asss.remove(ass)
+                            break
+                    else:
+                        if verbose: print("var = ", var, "isn't an array")
+        idx_ass=idx_ass+1
     
+#    pt_asss=copy.deepcopy(new_pt_asss)
+    def get_pointers(pointers, asss):
+
+        for ass in asss:
+            variables=FindVariables(Array).visit(ass.lhs)
+            for var in variables:
+                if var.type.pointer:
+                    pointers.append(var.name)
     pointers=[]
-    for ass in pt_asss:
+    get_pointers(pointers, pt_asss)
+    if not is_index:
+        pointers_derive=[]
+        get_pointers(pointers_derive, pt_asss_derive)
+
+    for ass in pt_asss_derive:
         variables=FindVariables(Array).visit(ass)
         for var in variables:
             if var.type.pointer:
-                pointers.append(var.name)
+                if isinstance(var.shape[0], DeferredTypeSymbol) or isinstance(var.shape[0], Scalar):
+                    if var.shape[0] in NPROMA: #if first dim in NPROMA, pointer should respect what's tested above...
+                        pointers.append(var.name)
+
+
     frame = inspect.currentframe()
     if verbose: print("The name of function is : ", frame.f_code.co_name)
     if pt_asss:
-         msg=f"Routine :  {subroutine.name} => wrong use of some pointers : {pointers}"
-         return(msg)
+        msg=f"Routine :  {subroutine.name} => wrong use of some pointers : {pointers}"
+    if pt_asss_derive:
+        msg+=f"\n ??? wrong use of some pointers : {pointers_derive} ???"
+    if len(msg)!=0:
+        return(msg)
 #=====================================================================
 #=====================================================================
 #                   Calling other NPROMA routines 
@@ -411,10 +470,13 @@ def check14(subroutine):
     """
     Checks if horizontal dimension, horizontal bounds and horizontal index have the right name.
     names in NPROMA, BOUNDS and JLON.
+#### TODO or not ??? :::     if var is a pointer : ignore first dim check. see check5
+    lst_not_nproma_pt=[var for var in lst_not_nproma if var.
+    if var is a pointer : ignore first dim check.
     """
     NPROMA=["NPROMA", "KLON","YDGEOMETRY%YRDIM%NPROMA","YDCPG_OPTS%KLON","D%NIJT","KPROMA"]
     BOUNDS=["KST/KEND","KIDIA/KFDIA","YDCPG_BNDS%KIDIA/KDCPG_BNDS%KFDIA","D%NIJB/D%NIJE","D%NIB/D%NIE"]
-    JLON=["JLON","JROF","JIJ","JI"]
+    JLON=["JLON","JROF","JIJ","JI", "JL"]
 
     msg=""
     msg_nproma=""
@@ -425,23 +487,28 @@ def check14(subroutine):
 #    arrays=[var for var in subroutine.variables if var not in subroutine.arguments and isinstance(var, Array)]
    
 #1- first check that first dim of arrays in NPROMA
-#!!!! CAN BE NONE NPROMA ARRAYS IN YDVARS ?? !!!!!
-    #OR DIRECTLY CALL CHECK5
     arrays=[var for var in FindVariables().visit(subroutine.body) if isinstance(var, Array)]
     for var in arrays:
         if var.shape:
-            if type(var.shape[0])==(DeferredTypeSymbol or Scalar): 
+            if isinstance(var.shape[0], DeferredTypeSymbol)  or isinstance(var.shape[0], Scalar): 
                 if var.shape[0].name not in NPROMA:
                     if verbose: msg_nproma+=f" *** var : {var.name} has none nproma dim as first dim : {var.shape[0].name}\n"
                     
                     lst_not_nproma.append(var.name)    
             else:
                 lst_not_nproma.append(var.name)    
-                if verbose: msg_nproma+=f" *** var : {var.name} has range indx first dim !!! \n"
+                if verbose: msg_nproma+=f" *** var : {var.name} has range index first dim !!! \n"
+        elif is_derive(var):
+            if is_index:
+                raise NotImplementedError(f"dim is neither slice, section or scalar : dim = {dim}")
+                #derived type will arrive here : TODO ::: add the index with the derived types.
+            else:
+                lst_not_nproma.append(var.name) 
+                if verbose: msg_nproma+=f" ??? *** var : {var.name} has unknow first dim !!! ??? \n"
         else:
-            #derived type will arrive here : TODO ::: add the index with the derived types.
             lst_not_nproma.append(var.name) 
             if verbose: msg_nproma+=f" *** var : {var.name} has unknow first dim !!! \n"
+
     if len(msg_nproma)!=0:
         print(msg_nproma) 
     #if verbose: print(msg_nproma) 
@@ -452,48 +519,33 @@ def check14(subroutine):
         #is_int=False 
         msg_loop=""
         
-#        print("loop = ", loop)
-#        print("loop_bounds = ", loop.bounds)
-        #Lower bound
-#        if isinstance(loop.bounds.lower, IntLiteral):
-#            #is_int=True
-#            loop_bounds=str(loop.bounds.lower.value)
-#        if isinstance(loop.bounds.lower, DeferredTypeSymbol):    
-#            loop_bounds=loop.bounds.lower.name
-#        if isinstance(loop.bounds.lower, Scalar):    
-#            loop_bounds=loop.bounds.lower.name
-#        #Upper bound
-#        if isinstance(loop.bounds.upper, IntLiteral):
-#            #is_int=True
-#            loop_bounds=loop_bounds+"/"+str(loop.bounds.upper.value)
-#        if isinstance(loop.bounds.upper, DeferredTypeSymbol):    
-#            loop_bounds=loop_bounds+"/"+loop.bounds.upper.name
-#        if isinstance(loop.bounds.upper, Scalar):    
-#            loop_bounds=loop.bounds.upper.name
-
         loop_bounds=str(loop.bounds.lower)+'/'+str(loop.bounds.upper)
 
         
         loop_idx=loop.variable
        # if loop_bounds not in 
-        loop_vars1=FindVariables().visit(loop.body)
-        loop_vars=[var for var in loop_vars1 if isinstance(var, Array)]       
+        loop_vars_=[]
+        loop_vars=[]
+        loop_vars_=FindVariables().visit(loop.body)
+        loop_vars=[var for var in loop_vars_ if isinstance(var, Array)]       
         is_bound=loop_bounds in BOUNDS
         is_idx=loop_idx.name in JLON
 
+#        print("loop_vars =", loop_vars)
         for var in loop_vars:
             if var.name not in lst_not_nproma:
-                if var.dimensions[0] != loop_idx: #isn't loop over the first dim. And that means not a nproma loop if 1- is True      
-                    break
-                else: #first dimension is the loop idx
-                    is_nproma=var.shape[0].name in NPROMA
-
-                    is_bound=True
-                if not is_idx:
-                    msg_loop+=f"wrong loop variable : {loop_idx.name}; "
-                    is_idx=True
-                if not is_nproma:
-                    msg_loop+=f"var : {var.name} has unknwown first dimension : {var.shape[0].name}; "
+                if bool(var.dimensions): #var may have no "dimensions", for example if var comes from a call statement.
+                    if var.dimensions[0] != loop_idx: #isn't loop over the first dim. And that means not a nproma loop if 1- is True      
+                        break
+                    else: #first dimension is the loop idx
+                        is_nproma=var.shape[0].name in NPROMA
+    
+                        is_bound=True
+                    if not is_idx:
+                        msg_loop+=f"wrong loop variable : {loop_idx.name}; "
+                        is_idx=True
+                    if not is_nproma:
+                        msg_loop+=f"var : {var.name} has unknwown first dimension : {var.shape[0].name}; "
         if len(msg_loop)!=0:
             msg+=f" *** loop : {loop} => {msg_loop} \n"
     frame = inspect.currentframe()
