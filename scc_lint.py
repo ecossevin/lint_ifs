@@ -570,20 +570,54 @@ def check14(subroutine):
 def check15(subroutine):
     
    """
-   Check if MINVAL or MAXVAL are used. 
+   Check if MINVAL or MAXVAL are used over NPROMA dim.
    SUM can be use, but the result of the sum musn't be used in a calculation, it will break reproductibility. 
    """
    calls=[]
 #   lst_sum=[]
+  
+   NPROMA=["NPROMA", "KLON","YDGEOMETRY%YRDIM%NPROMA","YDCPG_OPTS%KLON","D%NIJT","KPROMA"]
    msg=""
    for assign in FindNodes(Assignment).visit(subroutine.body):
        for call in FindInlineCalls().visit(assign):
 #           if (call.name=="SUM"):
 #               lst_sum.append(assign.lhs)
    
-           if (call.name=="MINVAL") or (call.name=="MAXVAL"):
-               msg+="*** " + fgen(assign)+"\n"
-     
+            if (call.name=="MINVAL") or (call.name=="MAXVAL"):
+                arg=call.arguments #should be only one arg
+                if len(arg)>1:
+                    raise NotImplementedError("MAXVAL and MINVAL should have only one arg!")
+
+                else:
+                    args=arg[0]
+                    variables_=FindVariables().visit(args)
+                    variables=[var for var in variables_ if isinstance(var, Array)]
+#                    print("variables = ", variables)
+                    derive=False
+                    wrong=False
+                    for var in variables:
+                        if is_derive(var):
+                            if is_index:
+                                 raise NotImplementedError("is_index not implemented yet")
+                            else:
+                                msg_derive="??? can't solve this reduction: "+fgen(assign)+" ??? \n"
+                                derive=True
+                        else:
+                            idx=0
+                            is_nproma=False
+                            for shape in var.shape: #look for NPROMA dim... Won't detect wrong reduction if the horizontal idx isn't NPROMA
+                                if shape in NPROMA:
+                                    is_nproma=True
+                                    break
+                                    idx=idx+1
+                            if is_nproma:
+                                if isinstance(var.dimensions[idx], RangeIndex): #in a reduction ":" musn't be on the NPROMA dim.
+                                    msg+="*** " + fgen(assign)+"\n"
+                                    wrong=True
+                                    break
+                    if derive and not wrong: #if can't solve some var but there is at least one var on which the reduction is on NPROMA : not important if some var # solve.
+                        msg+=msg_derive
+                                    
    frame = inspect.currentframe()
    if verbose: print("The name of function is : ", frame.f_code.co_name)
    if len(msg)!=0:
@@ -627,7 +661,7 @@ def show(routine, subroutine):
         print(c)
 
        
-#Dummy arguments of NPROMA subroutines ::: 
+#DFindInlineCalls().visit(assign)ummy arguments of NPROMA subroutines ::: 
 show(check1,subroutine)
 show(check2,subroutine)
 show(check3,subroutine)
