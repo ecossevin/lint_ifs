@@ -185,19 +185,128 @@ def check7(subroutine):
 
     pt_asss=[ass for ass in FindNodes(Assignment).visit(subroutine.body) if ass.ptr]
        
+###    conds=FindNodes(Conditional).visit(subroutine.body)
+###    for cond in conds:
+###        calls=FindInlineCalls().visit(cond.condition)
+###        calls=[call for call in calls if call.name=="PRESENT"]
+###        if calls:
+###            cond_asss=[ass for ass in FindNodes(Assignment).visit(cond) if ass.ptr]
+###           # is_pt=True #check is lhs = PT in both IF and ELSE blk
+###            for cond_ass in cond_asss:
+###                if cond_ass.lhs.name in pt_name: #and is_pt:
+###                    pt_asss.remove(cond_ass)
+###                    is_pt=True
+###            #    else:
+###            #        is_pt=False
+    def is_lst_pt(lst_pt, pt_asss,pt_cond_asss_bod,pt_cond_asss_else=None):
+        """
+        pt_cond_asss_body: pt assignment of the body of the cond
+        pt_cond_asss_else: pt assignment of the else of the cond
+        lst_pt: lst of 'PRESENT' vars
+        pt_asss : all the pt assignment of the routine
+    
+        This routine checks if all the pointers assignment of at least the body or the else are all in the PRESENT clause. If it's the case, all the  pt assignments of the conditionnal are remove from the     routine pt_asss list.
+
+
+        TARGET, OPTIONAL :: rhs1(DIM1,...
+        POINTER :: lhs1(:,...
+        TARGET :: rhs2(DIM1,...
+
+        IF PRESENT(rhs1) !rhs is TARGET
+        lhs1 => rhs1
+        ELSE
+        lhs1 => rhs2
+        """
+
+    
+        lst_lhs={} #dict lst_lhs[lhs.name]=rhs, common to IF and ELSE parts. Need to store rhs to check if dimensions are the same in IF and ELSE.
+        #lst_lhs=[] #lst of pointers on the lhs, common to IF and ELSE parts.
+        to_remove_body=[] #if rhs is in the 'PRESENT' list, this pointer assignment can be removed.
+        to_remove_else=[]
+        for cond_ass in pt_cond_asss_body:
+            if cond_ass.rhs.name in lst_pt:
+                to_remove_body.append(cond_ass)
+                lst_lhs[cond_ass.lhs.name]=cond_ass.rhs
+#                lst_lhs.append(cond_ass.lhs.name)
+    
+
+        if pt_cond_asss_else:
+            for cond_ass in pt_cond_asss_else:
+                if cond_ass.rhs.name in lst_pt:
+                    to_remove_else.append(cond_ass)
+                    #add cond_ass.lhs.name to lst_lhs only of rhs1 and rhs2 have the same dimensions!!! 
+                    if cond_ass.rhs.dimensions == lst_lhs[cond_ass.lhs.name].dimensions: # rhs2.dimensions == lst_lhs[lhs1.name].dimensions = rhs1.dimensions
+   #                     lst_lhs.append(cond_ass.lhs.name)
+                        lst_lhs[cond_ass.lhs.name]=cond_ass.rhs
+                    #lst_lhs.append(cond_ass.lhs.name)
+    
+    
+        if to_remove_body==pt_cond_asss_body or to_remove_else==pt_cond_asss_else:
+            to_remove=to_remove_body+to_remove_else
+            for cond_ass in pt_cond_asss_bod+pt_cond_asss_else:
+                if cond_ass.lhs.name in lst_lhs:
+                    pt_asss.remove(cond_ass)
+#            for cond_ass in to_remove:
+#                pt_asss.remove(cond_ass)
+
+
+    def inspect_present(presents, dict_present):
+        for present in presents:
+            if len(present.arguments)>1:
+                raise NotImplementedError("present should have only one arg, not implemented")
+                
+            if ass.lhs.name in map_logical:
+                map_logical[ass.lhs.name].append(present.arguments[0].name)
+            else:
+                map_logical[ass.lhs.name]=[]
+                map_logical[ass.lhs.name].append(present.arguments[0].name)
+    
+#1) look for VAR = smthg(PRESENT)
+    map_logical={} #LOGICAL : all PRESENT vars
+    asss=[ass for ass in FindNodes(Assignment).visit(subroutine.body)]
+
+# TODO : don't just look for present but for PRESENT AND PRESENT...
+    for ass in asss:
+        calls=[call for call in FindInlineCalls().visit(ass)]
+        presents=[call for call in calls if call.name=="PRESENT"]
+        inspect_present(presents, map_logical)
+        presents=[]
+#2) look for cond IF ... PRESENT or IF(map_logical)
+
+
     conds=FindNodes(Conditional).visit(subroutine.body)
     for cond in conds:
+          
+        pt_cond_asss_body=[ass for ass in FindNodes(Assignment).visit(cond.body) if ass.ptr] 
+        pt_cond_asss_else=[ass for ass in FindNodes(Assignment).visit(cond.else_body) if ass.ptr] 
         calls=FindInlineCalls().visit(cond.condition)
-        calls=[call for call in calls if call.name=="PRESENT"]
-        if calls:
-            cond_asss=[ass for ass in FindNodes(Assignment).visit(cond) if ass.ptr]
-           # is_pt=True #check is lhs = PT in both IF and ELSE blk
-            for cond_ass in cond_asss:
-                if cond_ass.lhs.name in pt_name: #and is_pt:
-                    pt_asss.remove(cond_ass)
-                    is_pt=True
-            #    else:
-            #        is_pt=False
+        if pt_cond_asss_body or pt_cond_asss_else: #if pt assignment in the cond body
+            if calls: #IF( ... PRESENT)
+                presents=[call for call in calls if call.name=="PRESENT"]
+                for present in presents:
+                    if len(present.arguments)>1:
+                        raise NotImplementedError("present should have only one arg, not implemented")
+                    lst_pt.append(present.arguments[0].name)
+                
+                is_lst_pt(lst_pt, pt_asss,pt_cond_asss_body,pt_cond_asss_else)
+#                for cond_ass in pt_cond_asss:
+#                    if cond_ass.lrs.name in lst_pt:
+#                        pt_asss.remove(cond_ass)
+            else: #IF(LTOTO) 
+                if isinstance(cond.condition, Scalar):
+                    if cond.condition.name in map_logical:
+                        lst_pt=map_logical[cond.condition.name] #lst of pointers in the present clauses of the logical
+        
+                        is_lst_pt(lst_pt, pt_asss,pt_cond_asss_body,pt_cond_asss_else)
+                       # for cond_ass in pt_cond_asss:
+                       #     if cond_ass.rhs.name in lst_pt:
+                       #         pt_asss.remove(cond_ass)
+        lst_pt=[]
+        presents=[]
+        calls=[]
+        pt_cond_asss_body=[]
+        pt_cond_asss_else=[]
+
                      
     NPROMA=["NPROMA", "KLON","YDGEOMETRY%YRDIM%NPROMA","YDCPG_OPTS%KLON","D%NIJT","KPROMA"]
 #    new_pt_asss=copy.deepcopy(pt_asss)
@@ -400,6 +509,10 @@ def check11(subroutine):
                         is_array_syntax=True
                             
 
+            
+#        for var in FindVariables().visit(assign.rhs):
+#            if isinstance(var, Array):
+                
         if isinstance(assign.rhs, Array):
             is_copy=True
         if (isinstance(assign.rhs, FloatLiteral) or isinstance(assign.rhs, IntLiteral) or isinstance(assign.rhs, LogicLiteral)):
