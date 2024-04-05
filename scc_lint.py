@@ -179,25 +179,13 @@ def check7(subroutine):
     pt=[var for var in temps if var.type.pointer]
     pt_name=[var.name for var in temps if var.type.pointer]
     asss=FindNodes(Assignment).visit(subroutine.body) #when pt assignment found in an IF(PRESENT), rm the ass for the list. At the end, look for pt assignment in the list :  1)If the list is empty, that means that pointers were used where they are allowed to be used. 2)Else, rule not respected
-    pt_asss_derive=[]
+    pt_asss_derive=[]#assignment that can't be resolve because of derived type in them
     msg=""
     
 
     pt_asss=[ass for ass in FindNodes(Assignment).visit(subroutine.body) if ass.ptr]
-       
-###    conds=FindNodes(Conditional).visit(subroutine.body)
-###    for cond in conds:
-###        calls=FindInlineCalls().visit(cond.condition)
-###        calls=[call for call in calls if call.name=="PRESENT"]
-###        if calls:
-###            cond_asss=[ass for ass in FindNodes(Assignment).visit(cond) if ass.ptr]
-###           # is_pt=True #check is lhs = PT in both IF and ELSE blk
-###            for cond_ass in cond_asss:
-###                if cond_ass.lhs.name in pt_name: #and is_pt:
-###                    pt_asss.remove(cond_ass)
-###                    is_pt=True
-###            #    else:
-###            #        is_pt=False
+    #derive_asss=[] #assignment that can't be resolve because of derived type in them
+
     def is_lst_pt(lst_pt, pt_asss,pt_cond_asss_bod,pt_cond_asss_else=None):
         """
         pt_cond_asss_body: pt assignment of the body of the cond
@@ -217,7 +205,6 @@ def check7(subroutine):
         ELSE
         lhs1 => rhs2
         """
-
     
         lst_lhs={} #dict lst_lhs[lhs.name]=rhs, common to IF and ELSE parts. Need to store rhs to check if dimensions are the same in IF and ELSE.
         #lst_lhs=[] #lst of pointers on the lhs, common to IF and ELSE parts.
@@ -227,20 +214,32 @@ def check7(subroutine):
             if cond_ass.rhs.name in lst_pt:
                 to_remove_body.append(cond_ass)
                 lst_lhs[cond_ass.lhs.name]=cond_ass.rhs
-#                lst_lhs.append(cond_ass.lhs.name)
-    
-
+                #lst_lhs.append(cond_ass.lhs.name)
+        
+        
         if pt_cond_asss_else:
             for cond_ass in pt_cond_asss_else:
                 if cond_ass.rhs.name in lst_pt:
                     to_remove_else.append(cond_ass)
                     #add cond_ass.lhs.name to lst_lhs only of rhs1 and rhs2 have the same dimensions!!! 
-                    if cond_ass.rhs.dimensions == lst_lhs[cond_ass.lhs.name].dimensions: # rhs2.dimensions == lst_lhs[lhs1.name].dimensions = rhs1.dimensions
-   #                     lst_lhs.append(cond_ass.lhs.name)
+                    if not is_index:
+                        if is_derive(cond_ass.rhs):
+                            pt_asss_derive.append(cond_ass)
+                            break
+                        if is_derive(cond_ass.lhs):
+                            pt_asss_derive.append(cond_ass)
+                            break
+                    if is_index:
+                        raise NotImplementedError("looking for derived type shape in the index isn't implemented yet!")
+
+
+                    if cond_ass.rhs.shape == lst_lhs[cond_ass.lhs.name].sape: # rhs2.shape == lst_lhs[lhs1.name].shape = rhs1.shape
+                    #if cond_ass.rhs.dimensions == lst_lhs[cond_ass.lhs.name].dimensions: # rhs2.dimensions == lst_lhs[lhs1.name].dimensions = rhs1.dimensions
+                 #       lst_lhs.append(cond_ass.lhs.name)
                         lst_lhs[cond_ass.lhs.name]=cond_ass.rhs
                     #lst_lhs.append(cond_ass.lhs.name)
-    
-    
+        
+        
         if to_remove_body==pt_cond_asss_body or to_remove_else==pt_cond_asss_else:
             to_remove=to_remove_body+to_remove_else
             for cond_ass in pt_cond_asss_bod+pt_cond_asss_else:
@@ -248,19 +247,19 @@ def check7(subroutine):
                     pt_asss.remove(cond_ass)
 #            for cond_ass in to_remove:
 #                pt_asss.remove(cond_ass)
-
-
-    def inspect_present(presents, dict_present):
-        for present in presents:
-            if len(present.arguments)>1:
-                raise NotImplementedError("present should have only one arg, not implemented")
-                
-            if ass.lhs.name in map_logical:
-                map_logical[ass.lhs.name].append(present.arguments[0].name)
-            else:
-                map_logical[ass.lhs.name]=[]
-                map_logical[ass.lhs.name].append(present.arguments[0].name)
+        
     
+    def inspect_present(presents, dict_present):
+       for present in presents:
+           if len(present.arguments)>1:
+               raise NotImplementedError("present should have only one arg, not implemented")
+               
+           if ass.lhs.name in map_logical:
+               map_logical[ass.lhs.name].append(present.arguments[0].name)
+           else:
+               map_logical[ass.lhs.name]=[]
+               map_logical[ass.lhs.name].append(present.arguments[0].name)
+   
 #1) look for VAR = smthg(PRESENT)
     map_logical={} #LOGICAL : all PRESENT vars
     asss=[ass for ass in FindNodes(Assignment).visit(subroutine.body)]
@@ -307,7 +306,7 @@ def check7(subroutine):
         pt_cond_asss_body=[]
         pt_cond_asss_else=[]
 
-                     
+
     NPROMA=["NPROMA", "KLON","YDGEOMETRY%YRDIM%NPROMA","YDCPG_OPTS%KLON","D%NIJT","KPROMA"]
 #    new_pt_asss=copy.deepcopy(pt_asss)
 #    for ass in pt_asss:
@@ -493,38 +492,52 @@ def check10(subroutine):
 def check11(subroutine):
     """
     Array syntax is forbidden, except for array initialization and array copy.
+rech si arrays ds expt => 1) si un seul tableau : si #mult
+
+1) si plus de 1 tableau : pas de array syntax ds les tableaux : ok (A(:) = B(I)+C(I,J)
+2) si un seul tableau :  1) if isinstance(Array) sans rien => Ok c'est une copie
+                         2) else : un seul tableau mais element n'apparait pas comme tableau => ça veut dire qu'on a un opérateur => pas bon
+                         
+2) si aucun tableau => c'est bon
     """               
+
+    def is_array_syntax(node):
+        for var in FindVariables().visit(node):
+            if isinstance(var, Array):
+                for dim in var.dimensions:
+                    if isinstance(dim, RangeIndex):
+                        return(True)
+        return(False)
+
     verbose=False
     msg=""
     for assign in FindNodes(Assignment).visit(subroutine.body):
-        is_copy=False
-        is_init=False
-        is_array_syntax=False
-        for var in FindVariables().visit(assign.lhs):
-            if isinstance(var, Array):
-                for dim in var.dimensions:
-                    #if dim == ':':
-                    if isinstance(dim, RangeIndex):
-                        #if not any(dim.children): # ':'
-                        is_array_syntax=True
+        array_syntax=is_array_syntax(assign.lhs)
                             
 
             
-#        for var in FindVariables().visit(assign.rhs):
-#            if isinstance(var, Array):
+        if array_syntax:
+            arrays = [var for var in FindVariables().visit(assign.rhs) if isinstance(var, Array)]
+            if len(arrays)>1:
+                for array in arrays:
+                    if is_array_syntax(array):
+                        msg+=f" *** Some array syntax in {fgen(assign)}\n"
+            if len(arrays)==1:
+                if not isinstance(assign.rhs, Array) and is_array_syntax(arrays[0]):
+                    msg+=f" *** Some array syntax in {fgen(assign)}\n"
                 
-        if isinstance(assign.rhs, Array):
-            is_copy=True
-        if (isinstance(assign.rhs, FloatLiteral) or isinstance(assign.rhs, IntLiteral) or isinstance(assign.rhs, LogicLiteral)):
-#        if not FindVariables().visit(assign.rhs):
-            is_init=True
-#todo if rhs is a big expression of constants 
-        if (isinstance(assign.rhs, Product)):
-            if assign.rhs.children[0]==-1 and isinstance(assign.rhs.children[1], FloatLiteral):
-                is_init=True
-    
-        if (is_array_syntax and not is_copy) and (is_array_syntax and not is_init):
-            msg+=f" *** Some array syntax in {fgen(assign)}\n"
+##        if isinstance(assign.rhs, Array):
+##            is_copy=True
+##        if (isinstance(assign.rhs, FloatLiteral) or isinstance(assign.rhs, IntLiteral) or isinstance(assign.rhs, LogicLiteral)):
+###        if not FindVariables().visit(assign.rhs):
+##            is_init=True
+###todo if rhs is a big expression of constants 
+##        if (isinstance(assign.rhs, Product)):
+##            if assign.rhs.children[0]==-1 and isinstance(assign.rhs.children[1], FloatLiteral):
+##                is_init=True
+##    
+##        if (is_array_syntax and not is_copy) and (is_array_syntax and not is_init):
+##            msg+=f" *** Some array syntax in {fgen(assign)}\n"
      
     frame = inspect.currentframe()
     if verbose: print("The name of function is : ", frame.f_code.co_name)
