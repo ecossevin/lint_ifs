@@ -32,6 +32,7 @@ def test_(n, result):
     subroutine=open(f"sub{n}.F90", test_path)
     check=map_check[n]
 #    resolve_associates(subroutine)
+    if not verbose: print(f"==> test {n} <==")
     if verbose: print(f"======== test {n} ======")
     if verbose: print(repr(check(subroutine)))
     #if verbose: print(check(subroutine))
@@ -47,5 +48,11 @@ result3="Routine :  SUB3 => 1 dummy args with assumed shapes: ['A']"
 test_(3, result3)
 result4="Routine :  SUB4 => ydmodel has wrong intent : inout (not intent in) \nRoutine :  SUB4 => ydgeometry has wrong intent : out (not intent in) \n"
 test_(4, result4)
-result5="Routine :  SUB5 => 4 temp with leading dim diff than nproma: ['B', 'C', 'C', 'D']"
+result5="Routine :  SUB5 => 3 temp with leading dim diff than nproma: ['B', 'D', 'F']"
 test_(5, result5)
+
+result6="Routine :  SUB6 => 1 temp allocatable : ['B']"
+test_(6,result6)
+result7="Routine :  GPHPRE_EXPL_VERTFE1 => wrong use of some pointers : ['ZLNPR', 'ZLNPR', 'AZPRESF', 'AZPRESF', 'A1', 'ZPRESF']"
+test_(7,result7)
+

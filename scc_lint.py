@@ -173,16 +173,17 @@ def check7(subroutine):
     asss=FindNodes(Assignment).visit(subroutine.body) #when pt assignment found in an IF(PRESENT), rm the ass for the list. At the end, look for pt assignment in the list :  1)If the list is empty, that means that pointers were used where they are allowed to be used. 2)Else, rule not respected
     pt_asss_derive=[]#assignment that can't be resolve because of derived type in them
     msg=""
+    ass_diffdim=[] #in a PRESENT(...) where there is an ELSE body, if a pointer is pointing on two fields of diff dim
     
 
     pt_asss=[ass for ass in FindNodes(Assignment).visit(subroutine.body) if ass.ptr]
     #derive_asss=[] #assignment that can't be resolve because of derived type in them
 
-    def is_lst_pt(lst_pt, pt_asss,pt_cond_asss_bod,pt_cond_asss_else=None):
+    def is_lst_pt(ass_diffdim, lst_present, pt_asss,pt_cond_asss_body,pt_cond_asss_else=None):
         """
         pt_cond_asss_body: pt assignment of the body of the cond
         pt_cond_asss_else: pt assignment of the else of the cond
-        lst_pt: lst of 'PRESENT' vars
+        lst_present: lst of 'PRESENT' vars
         pt_asss : all the pt assignment of the routine
     
         This routine checks if all the pointers assignment of at least the body or the else are all in the PRESENT clause. If it's the case, all the  pt assignments of the conditionnal are remove from the     routine pt_asss list.
@@ -203,38 +204,47 @@ def check7(subroutine):
         to_remove_body=[] #if rhs is in the 'PRESENT' list, this pointer assignment can be removed.
         to_remove_else=[]
         for cond_ass in pt_cond_asss_body:
-            if cond_ass.rhs.name in lst_pt:
+            if cond_ass.rhs.name in lst_present:
                 to_remove_body.append(cond_ass)
-                lst_lhs[cond_ass.lhs.name]=cond_ass.rhs
+                lst_lhs[cond_ass.lhs.name]=cond_ass
                 #lst_lhs.append(cond_ass.lhs.name)
         
         
         if pt_cond_asss_else:
             for cond_ass in pt_cond_asss_else:
-                if cond_ass.rhs.name in lst_pt:
+                if cond_ass.rhs.name in lst_present:
                     to_remove_else.append(cond_ass)
+                    print("=====================================================")
+                    print("=====================================================")
+                    print("       Warning ::: This cond shoudn't be true ?!     ")
+                    print("=====================================================")
+                    print("=====================================================")
                     #add cond_ass.lhs.name to lst_lhs only of rhs1 and rhs2 have the same dimensions!!! 
-                    if not is_index:
-                        if is_derive(cond_ass.rhs):
-                            pt_asss_derive.append(cond_ass)
-                            break
-                        if is_derive(cond_ass.lhs):
-                            pt_asss_derive.append(cond_ass)
-                            break
-                    if is_index:
-                        raise NotImplementedError("looking for derived type shape in the index isn't implemented yet!")
+                if not is_index:
+                    if is_derive(cond_ass.rhs):
+                        pt_asss_derive.append(cond_ass)
+                        break
+                    if is_derive(cond_ass.lhs):
+                        pt_asss_derive.append(cond_ass)
+                        break
+                if is_index:
+                    raise NotImplementedError("looking for derived type shape in the index isn't implemented yet!")
 
 
-                    if cond_ass.rhs.shape == lst_lhs[cond_ass.lhs.name].sape: # rhs2.shape == lst_lhs[lhs1.name].shape = rhs1.shape
+                if cond_ass.lhs.name in lst_lhs:
+                    if cond_ass.rhs.shape == lst_lhs[cond_ass.lhs.name].rhs.shape: # rhs2.shape == lst_lhs[lhs1.name].shape = rhs1.shape
                     #if cond_ass.rhs.dimensions == lst_lhs[cond_ass.lhs.name].dimensions: # rhs2.dimensions == lst_lhs[lhs1.name].dimensions = rhs1.dimensions
-                 #       lst_lhs.append(cond_ass.lhs.name)
-                        lst_lhs[cond_ass.lhs.name]=cond_ass.rhs
+#                         lst_lhs.append(cond_ass.lhs.name)
+                        lst_lhs[cond_ass.lhs.name]=cond_ass
                     #lst_lhs.append(cond_ass.lhs.name)
+                    else:
+                        ass_diffdim.append(cond_ass) 
+                        del lst_lhs[cond_ass.lhs.name]
         
         
-        if to_remove_body==pt_cond_asss_body or to_remove_else==pt_cond_asss_else:
+        if to_remove_body==pt_cond_asss_body or to_remove_else==pt_cond_asss_else: #all targets are in PRESENT
             to_remove=to_remove_body+to_remove_else
-            for cond_ass in pt_cond_asss_bod+pt_cond_asss_else:
+            for cond_ass in pt_cond_asss_body+pt_cond_asss_else:
                 if cond_ass.lhs.name in lst_lhs:
                     pt_asss.remove(cond_ass)
 #            for cond_ass in to_remove:
@@ -279,7 +289,7 @@ def check7(subroutine):
                         raise NotImplementedError("present should have only one arg, not implemented")
                     lst_pt.append(present.arguments[0].name)
                 
-                is_lst_pt(lst_pt, pt_asss,pt_cond_asss_body,pt_cond_asss_else)
+                is_lst_pt(ass_diffdim, lst_pt, pt_asss,pt_cond_asss_body,pt_cond_asss_else)
 #                for cond_ass in pt_cond_asss:
 #                    if cond_ass.lrs.name in lst_pt:
 #                        pt_asss.remove(cond_ass)
@@ -288,7 +298,7 @@ def check7(subroutine):
                     if cond.condition.name in map_logical:
                         lst_pt=map_logical[cond.condition.name] #lst of pointers in the present clauses of the logical
         
-                        is_lst_pt(lst_pt, pt_asss,pt_cond_asss_body,pt_cond_asss_else)
+                        is_lst_pt(ass_diffdim, lst_pt, pt_asss,pt_cond_asss_body,pt_cond_asss_else)
                        # for cond_ass in pt_cond_asss:
                        #     if cond_ass.rhs.name in lst_pt:
                        #         pt_asss.remove(cond_ass)
@@ -343,6 +353,7 @@ def check7(subroutine):
                 if var.type.pointer:
                     pointers.append(var.name)
     pointers=[]
+    pt_asss=[ass for ass in pt_asss if ass not in ass_diffdim]
     get_pointers(pointers, pt_asss)
     if not is_index:
         pointers_derive=[]
@@ -357,6 +368,7 @@ def check7(subroutine):
                         pointers.append(var.name)
 
 
+    pointers=pointers+[ass.lhs.name for ass in ass_diffdim]
     frame = inspect.currentframe()
     if verbose: print("The name of function is : ", frame.f_code.co_name)
     if pt_asss:
