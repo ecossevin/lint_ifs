@@ -19,15 +19,7 @@ import copy
 is_index=False #if no index, YDVARS%VAR1%VAR2 is unkown
 #is_index=True #if there is an index, YDVARS%VAR1%VAR2 is known
 debug=False
-if debug:
-    s=Sourcefile.from_file("sub.F90")
-    subroutine=s["SUB"]
-else:
-    file=sys.argv[1]
-    s=Sourcefile.from_file(file)
-    subroutine=s.subroutines[0]
-    resolve_associates(subroutine)
-#    print(fgen(subroutine.body))
+
 
 import inspect
 verbose=False
@@ -786,32 +778,44 @@ def show(routine, subroutine):
     if c:
         print(c)
 
-       
-#DFindInlineCalls().visit(assign)ummy arguments of NPROMA subroutines ::: 
-show(check1,subroutine)
-show(check2,subroutine)
-show(check3,subroutine)
-show(check4,subroutine)
-#Temporaries of NPROMA subroutines 
-show(check5,subroutine)
-show(check6,subroutine)
-#Pointers in NPROMA routines 
-show(check7,subroutine)
-#Calling other NPROMA routines 
-show(check8,subroutine)
-show(check9,subroutine)
-#Modules variables in NPROMA routines
-show(check10,subroutine)
-#Calculations in NPROMA routines
-show(check11,subroutine)
-#show(check12,subroutine)
-#Functions in NPROMA routines
-show(check13,subroutine)
-#Notations in NPROMA routines
-show(check14,subroutine)
-#Calling NPROMA routines from an OpenMP parallel section 
-#skip
-#Reductions in NPROMA routines
-show(check15,subroutine)
-#Gather/scatter (aka pack/unpack) in NPROMA routines
-show(check16,subroutine)
+if __name__ == "__main__":
+    
+    if debug:
+        s=Sourcefile.from_file("sub.F90")
+        subroutine=s["SUB"]
+    else:
+        file=sys.argv[1]
+        s=Sourcefile.from_file(file)
+        subroutine=s.subroutines[0]
+        resolve_associates(subroutine)
+    #    print(fgen(subroutine.body))
+      
+
+    #DFindInlineCalls().visit(assign)ummy arguments of NPROMA subroutines ::: 
+    show(check1,subroutine)
+    show(check2,subroutine)
+    show(check3,subroutine)
+    show(check4,subroutine)
+    #Temporaries of NPROMA subroutines 
+    show(check5,subroutine)
+    show(check6,subroutine)
+    #Pointers in NPROMA routines 
+    show(check7,subroutine)
+    #Calling other NPROMA routines 
+    show(check8,subroutine)
+    show(check9,subroutine)
+    #Modules variables in NPROMA routines
+    show(check10,subroutine)
+    #Calculations in NPROMA routines
+    show(check11,subroutine)
+    #show(check12,subroutine)
+    #Functions in NPROMA routines
+    show(check13,subroutine)
+    #Notations in NPROMA routines
+    show(check14,subroutine)
+    #Calling NPROMA routines from an OpenMP parallel section 
+    #skip
+    #Reductions in NPROMA routines
+    show(check15,subroutine)
+    #Gather/scatter (aka pack/unpack) in NPROMA routines
+    show(check16,subroutine)
